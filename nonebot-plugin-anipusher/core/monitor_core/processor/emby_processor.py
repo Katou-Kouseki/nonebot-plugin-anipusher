@@ -408,9 +408,18 @@ class EmbyDataProcessor(AbstractDataProcessor):
                 logger.opt(colors=True).info(
                     f"<g>TMDB</g>：有效ID，对应类型：{type}，ID：{tmdb_id}页面存在")
                 return True
+            except AppError.Exception as e:
+                if "404" in str(e) or "Not Found" in str(e):
+                    logger.opt(colors=True).warning(
+                        f"<y>TMDB</y>：无效ID，对应类型：{type}，ID：{tmdb_id}页面不存在")
+                    return False
+                else:
+                    logger.opt(colors=True).warning(
+                        f"<y>TMDB</y>：ID验证时发生异常：{e}")
+                    return False
             except Exception as e:
                 logger.opt(colors=True).warning(
-                    f"<y>TMDB</y>：验证ID时发生异常：{e}")
+                    f"<y>TMDB</y>：ID验证时发生异常：{e}")
                 return False
 
         async def _convert_external_id_to_tmdb(self, external_id: str | None, source: str) -> str | None:

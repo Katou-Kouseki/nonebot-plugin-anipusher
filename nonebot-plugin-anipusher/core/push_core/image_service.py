@@ -97,7 +97,11 @@ class ImageProcessor:
         try:
             if not WORKDIR.cache_dir:
                 raise AppError.Exception(AppError.MissingData, "项目缓存目录缺失！")
-            img_path = WORKDIR.cache_dir / "res" / "default.jpg"
+            img_path = WORKDIR.cache_dir / "res" / "default_img.jpg"
+            if not img_path.exists():
+                logger.opt(colors=True).warning(
+                    "<y>Pusher</y>：默认图片不存在")
+                return None
             return img_path
         except Exception as e:
             logger.opt(colors=True).warning(

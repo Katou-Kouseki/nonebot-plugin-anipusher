@@ -157,7 +157,7 @@ class AnimeProcess:
                 server_id = self.data.get("server_id")
                 if not FUNCTION.emby_enabled:
                     logger.opt(colors=True).info(
-                        f"{self.data_source.value}:未启用Emby功能，无法获取Emby系列链接")
+                        f"<y>{self.data_source.value}</y>:未启用Emby功能，无法获取Emby系列链接")
                     return None
                 try:
                     return EmbyUtils.splice_emby_series_url(host, series_id, server_id)

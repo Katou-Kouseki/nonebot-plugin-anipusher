@@ -145,18 +145,44 @@ class DataPicking:
         '''
         if not self.anime_db_data:
             logger.opt(colors=True).info(
-                "<y>Pusher</y>：无法获取订阅者，没有Anime表数据")
+                "<r>Pusher</r>：无法获取订阅者，意外的没有Anime表数据")
             return ({}, [])
         try:
-            group_subscriber = json.loads(
-                self.anime_db_data.get('group_subscriber') or '{}')
-            private_subscriber = json.loads(
-                self.anime_db_data.get('private_subscriber') or '[]')
+            # 获取群组订阅者
+            group_subscriber = self.anime_db_data.get('group_subscriber')
+            if group_subscriber is None:
+                group_subscriber = {}  # 默认值
+            elif isinstance(group_subscriber, str):
+                try:
+                    group_subscriber = json.loads(group_subscriber)
+                except json.JSONDecodeError as e:
+                    logger.opt(colors=True).warning(
+                        f"<y>Pusher</y>：json解析失败，字段group_subscriber：{group_subscriber}，错误信息：{e}")
+                    group_subscriber = {}
+            else:
+                logger.opt(colors=True).info(
+                    f"<y>Pusher</y>：群组订阅用户字段须是字典或 JSON 字符串，而不是 {type(group_subscriber)}")
+                group_subscriber = {}
+            # 获取私人订阅者
+            private_subscriber = self.anime_db_data.get('private_subscriber')
+            if private_subscriber is None:
+                private_subscriber = []  # 默认值
+            elif isinstance(private_subscriber, str):
+                try:
+                    private_subscriber = json.loads(private_subscriber)
+                except json.JSONDecodeError as e:
+                    logger.opt(colors=True).warning(
+                        f"<y>Pusher</y>：json解析失败，字段private_subscriber：{private_subscriber}，错误信息：{e}")
+                    private_subscriber = []
+            else:
+                logger.opt(colors=True).info(
+                    f"<y>Pusher</y>：私人订阅用户字段须是列表或 JSON 字符串，而不是 {type(private_subscriber)}")
+                private_subscriber = []
+            return (group_subscriber, private_subscriber)
         except Exception as e:
             logger.opt(colors=True).info(
-                f"<y>Pusher</y>：无法获取订阅者，JSON解析错误: {e}")
+                f"<r>Pusher</r>：获取订阅者时发生错误：{e}")
             return ({}, [])
-        return (group_subscriber, private_subscriber)
 
     def _pick_image_queue(self) -> list:
         '''

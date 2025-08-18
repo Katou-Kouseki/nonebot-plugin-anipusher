@@ -182,8 +182,6 @@ class DataPicking:
                 logger.opt(colors=True).info(
                     f"<y>Pusher</y>：私人订阅用户字段须是列表或 JSON 字符串，而不是 {type(private_subscriber)}")
                 private_subscriber = []
-            logger.opt(colors=True).info(
-                f"<y>Pusher</y>：获取到订阅者：{group_subscriber}，{private_subscriber}")
             return (group_subscriber, private_subscriber)
         except Exception as e:
             logger.opt(colors=True).info(

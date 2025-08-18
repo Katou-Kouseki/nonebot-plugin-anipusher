@@ -79,7 +79,7 @@ class ImageProcessor:
                     AppError.MissingData, "项目TMDB ID缺失！")
             if not WORKDIR.cache_dir:
                 raise AppError.Exception(AppError.MissingData, "项目缓存目录缺失！")
-            local_img_path = WORKDIR.cache_dir / f"{self.tmdb_id}.jpg"
+            local_img_path = WORKDIR.cache_dir / f"{self.tmdb_id}.png"
             # 如果本地存在图片，且未过期，则直接返回base64编码
             if not local_img_path.exists():
                 return None
@@ -97,10 +97,10 @@ class ImageProcessor:
         try:
             if not WORKDIR.cache_dir:
                 raise AppError.Exception(AppError.MissingData, "项目缓存目录缺失！")
-            img_path = WORKDIR.cache_dir / "res" / "default_img.jpg"
+            img_path = WORKDIR.cache_dir / "res" / "default_img.png"
             if not img_path.exists():
                 logger.opt(colors=True).warning(
-                    "<y>Pusher</y>：默认图片不存在")
+                    f"<y>Pusher</y>：默认图片不存在，请检查路径{img_path}")
                 return None
             return img_path
         except Exception as e:

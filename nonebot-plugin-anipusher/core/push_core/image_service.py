@@ -1,5 +1,6 @@
 import asyncio
 import shutil
+import aiohttp
 from pathlib import Path
 from typing import Literal
 from nonebot import logger
@@ -21,55 +22,38 @@ class ImageProcessor:
     async def process(self) -> Path | None:
         # 先搜索本地存储
         self.output_img = self._search_in_localstore()  # 如果有且未过期，则设置output_img并返回，否则继续
-        if self.output_img:
-            if self.is_image_expired:
-                logger.opt(colors=True).info(
-                    '<y>Pusher</y>：发现可用的本地图片，但图片已过期，尝试重新获取')
-            else:
-                logger.opt(colors=True).info(
-                    '<g>Pusher</g>：发现可用的本地图片，使用本地图片')
-                return self.output_img
-        # 尝试从图片队列中获取↓
-        # 如果没有图片队列，则返回默认图片
+        # 如果有未过期的本地图片，直接返回
+        if self.output_img and not self.is_image_expired:
+            logger.opt(colors=True).info('<g>Pusher</g>：发现可用的本地图片，使用本地图片')
+            return self.output_img
+        # 本地图片已过期时的日志
+        if self.output_img and self.is_image_expired:
+            logger.opt(colors=True).info('<y>Pusher</y>：发现本地图片已过期，尝试获取新图片')
+        # 处理图片队列
+        result = await self._process_image_queue()
+        if result:
+            return result
+        # 所有尝试失败后的回退逻辑
+        return self._fallback_to_available_image()
+
+    async def _process_image_queue(self) -> Path | None:
+        # 如果图片队列不为空，则处理图片队列
         if not self.image_queue:
-            if self.output_img:
-                logger.opt(colors=True).info(
-                    '<y>Pusher</y>：获取新图片失败，回退使用超期图片')
-                return self.output_img
-            logger.opt(colors=True).info('<y>Pusher</y>：没有获取到图片，回退使用默认图片')
-            return self._default_image()
-        # 如果有图片队列,首先清洗图片队列，生成只有url的队列
+            return None
+        # 清理图片队列，获取有效图片列表
         cleaned_urls = self._clean_image_queue()
-        # 如果清洗后没有图片，则返回默认图片
         if not cleaned_urls:
-            if self.output_img:
-                logger.opt(colors=True).info(
-                    '<y>Pusher</y>：获取新图片失败，回退使用超期图片')
-                return self.output_img
-            logger.opt(colors=True).info('<y>Pusher</y>：没有获取到可用图片，使用默认图片')
-            return self._default_image()
-        # 如果清洗后还有图片，则尝试下载图片，返回首个可用的图片的二进制
+            return None
+        # 下载并保存图片
         image_data = await self._download_first_valid_image(cleaned_urls)
         if not image_data:
-            if self.output_img:
-                logger.opt(colors=True).info(
-                    '<y>Pusher</y>：获取新图片失败，回退使用超期图片')
-                return self.output_img
-            logger.opt(colors=True).info('<y>Pusher</y>：没有获取到可用图片，使用默认图片')
-            return self._default_image()
-        # 如果成功获取到图片，则保存到本地，返回保存路径
+            return None
         img_path = await self._save_bytes_to_cache(image_data)
         if img_path:
             self.output_img = img_path
             logger.opt(colors=True).info('<g>Pusher</g>：刷新图片缓存 <g>完成</g>')
-            return self.output_img
-        else:
-            if self.output_img:
-                logger.opt(colors=True).info(
-                    '<y>Pusher</y>：获取新图片失败，回退使用超期图片')
-                return self.output_img
-            logger.opt(colors=True).info('<y>Pusher</y>：没有获取到可用图片，使用默认图片')
-            return self._default_image()
+            return img_path
+        return None
 
     # 在本地存储中查找图片，如果找不到，则返回None，等待后续处理
     def _search_in_localstore(self) -> None | Path:
@@ -82,6 +66,8 @@ class ImageProcessor:
             local_img_path = WORKDIR.cache_dir / f"{self.tmdb_id}.png"
             # 如果本地存在图片，且未过期，则直接返回base64编码
             if not local_img_path.exists():
+                logger.opt(colors=True).info(
+                    "<y>Pusher</y>：本地图片不存在，尝试获取新图片")
                 return None
             # 如果图片未过期，则直接返回base64编码
             if CommonUtils.is_cache_img_expired(local_img_path):
@@ -149,7 +135,15 @@ class ImageProcessor:
                     }
                     proxy = APPCONFIG.proxy
                 task = asyncio.create_task(
-                    get_request(url, headers=headers, proxy=proxy, is_binary=True))
+                    get_request(url,
+                                headers=headers,
+                                proxy=proxy,
+                                is_binary=True,
+                                timeout=aiohttp.ClientTimeout(
+                                    total=15,      # 总超时
+                                    connect=5,    # 连接超时
+                                    sock_read=5  # 读取超时
+                                )))
                 tasks.append(task)
             except Exception as e:
                 logger.opt(colors=True).warning(
@@ -202,3 +196,12 @@ class ImageProcessor:
                         f"<y>Pusher</y>：临时图片删除失败，错误信息：{e}")
             return False
         return img_path
+
+    def _fallback_to_available_image(self) -> Path | None:
+        """回退到可用图片（过期图片或默认图片）"""
+        if self.output_img:
+            logger.opt(colors=True).info('<y>Pusher</y>：获取新图片失败，回退使用超期图片')
+            return self.output_img
+
+        logger.opt(colors=True).info('<y>Pusher</y>：没有获取到可用图片，使用默认图片')
+        return self._default_image()

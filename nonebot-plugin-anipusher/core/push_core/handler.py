@@ -56,7 +56,7 @@ class PushService:
         if not self.tmdb_id:
             logger.opt(colors=True).warning(
                 f"<y>Pusher</y>：{self.source.value} 未配置TMDB ID")
-            anime_data = DatabaseTables.get_table_schema(
+            anime_data = DatabaseTables.generate_default_schema(
                 DatabaseTables.TableName.ANIME).copy()
         else:
             # 通过TMDB ID获取Anime库中的数据
@@ -75,7 +75,8 @@ class PushService:
         await self._modify_send_status()
         logger.opt(colors=True).info(
             "<g>Pusher</g>：数据库发送状态更新 <g>完成</g>")
-        logger.opt(colors=True).info(f"<g>Pusher</g>：{self.tmdb_id} 推送服务 <g>结束</g> ")
+        logger.opt(colors=True).info(
+            f"<g>Pusher</g>：{self.tmdb_id} 推送服务 <g>结束</g> ")
         return
 
     async def _search_unsent_data(self):

@@ -132,7 +132,6 @@ class DataPicking:
         if self.anime_db_data:
             if tmdb_id := self.anime_db_data.get('tmdb_id'):
                 return tmdb_id
-        logger.opt(colors=True).info('Pusher：<y>未获取到tmdb_id！</y>')
         return None
 
     def _pick_subscriber(self) -> tuple[dict[Any, Any], list[str]]:
@@ -166,7 +165,8 @@ class DataPicking:
                     f"<y>Pusher</y>：群组订阅用户字段须是字典或 JSON 字符串，而不是 {type(group_subscriber)}")
                 group_subscriber = {}
             # 获取私人订阅者
-            private_subscriber = self.anime_db_data.get('private_subscriber')
+            private_subscriber = self.anime_db_data.get(
+                'private_subscriber', [])
             if private_subscriber is None:
                 private_subscriber = []  # 默认值
             elif isinstance(private_subscriber, str):
@@ -182,6 +182,8 @@ class DataPicking:
                 logger.opt(colors=True).info(
                     f"<y>Pusher</y>：私人订阅用户字段须是列表或 JSON 字符串，而不是 {type(private_subscriber)}")
                 private_subscriber = []
+            logger.opt(colors=True).info(
+                f"<y>Pusher</y>：获取到群组订阅者：{group_subscriber}，私人订阅者：{private_subscriber}")
             return (group_subscriber, private_subscriber)
         except Exception as e:
             logger.opt(colors=True).info(

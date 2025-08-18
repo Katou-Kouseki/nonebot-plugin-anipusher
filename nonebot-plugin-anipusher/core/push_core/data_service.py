@@ -149,7 +149,7 @@ class DataPicking:
             return ({}, [])
         try:
             # 获取群组订阅者
-            group_subscriber = self.anime_db_data.get('group_subscriber')
+            group_subscriber = self.anime_db_data.get('group_subscriber', {})
             if group_subscriber is None:
                 group_subscriber = {}  # 默认值
             elif isinstance(group_subscriber, str):
@@ -159,6 +159,8 @@ class DataPicking:
                     logger.opt(colors=True).warning(
                         f"<y>Pusher</y>：json解析失败，字段group_subscriber：{group_subscriber}，错误信息：{e}")
                     group_subscriber = {}
+            elif isinstance(group_subscriber, dict):  # dict类型可直接使用
+                pass
             else:
                 logger.opt(colors=True).info(
                     f"<y>Pusher</y>：群组订阅用户字段须是字典或 JSON 字符串，而不是 {type(group_subscriber)}")
@@ -174,10 +176,14 @@ class DataPicking:
                     logger.opt(colors=True).warning(
                         f"<y>Pusher</y>：json解析失败，字段private_subscriber：{private_subscriber}，错误信息：{e}")
                     private_subscriber = []
+            elif isinstance(private_subscriber, list):  # list类型可直接使用
+                pass
             else:
                 logger.opt(colors=True).info(
                     f"<y>Pusher</y>：私人订阅用户字段须是列表或 JSON 字符串，而不是 {type(private_subscriber)}")
                 private_subscriber = []
+            logger.opt(colors=True).info(
+                f"<y>Pusher</y>：获取到订阅者：{group_subscriber}，{private_subscriber}")
             return (group_subscriber, private_subscriber)
         except Exception as e:
             logger.opt(colors=True).info(

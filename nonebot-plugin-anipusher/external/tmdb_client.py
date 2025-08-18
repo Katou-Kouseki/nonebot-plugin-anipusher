@@ -84,10 +84,10 @@ class TmdbClient:
         if not isinstance(id, int):
             raise AppError.Exception(
                 AppError.UnSupportedType, "参数类型错误！ID 应为int类型")
-        if type in ["Episode", "Series"]:
-            endpoint = f"tv/{id}"
-        else:
+        if type == "Movie":
             endpoint = f"movie/{id}"
+        else:
+            endpoint = f"tv/{id}"
         return await TmdbClient._request_tmdb_api(endpoint)
 
     @staticmethod

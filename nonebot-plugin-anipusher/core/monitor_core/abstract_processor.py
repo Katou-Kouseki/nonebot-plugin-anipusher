@@ -92,13 +92,9 @@ class AbstractDataProcessor(ABC):  # 数据处理基类
 
     # 可选项，Anime数据处理
     async def _anime_process(self):
-        if not self.tmdb_id:
-            logger.opt(colors=True).warning(
-                f"<y>{self.source.value}</y>：未获取到TMDB ID，跳过Anime数据处理")
-            return
         if not self.reformated_data:
             logger.opt(colors=True).warning(
-                f"<y>{self.source.value}</y>：待处理的数据为空，跳过Anime数据处理")
+                f"<r>{self.source.value}</r>：意外的Anime数据处理：待处理的数据为空")
             return
         try:
             anime_process = AnimeProcess(

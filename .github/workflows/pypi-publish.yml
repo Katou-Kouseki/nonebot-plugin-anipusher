@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   pypi-publish:
-    name: Upload release to TestPyPI
+    name: Upload release to PyPI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -30,7 +30,7 @@ jobs:
       - name: Verify package
         run: twine check dist/*
 
-      - name: Publish to TestPyPI
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true  # 如果包已存在则跳过，避免 400 错误

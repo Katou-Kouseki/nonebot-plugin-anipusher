@@ -403,15 +403,15 @@ class EmbyDataProcessor(AbstractDataProcessor):
                     return False
                 if response.get("status_code") == 34 or response.get("success") is False:
                     logger.opt(colors=True).warning(
-                        f"<y>TMDB</y>：无效ID，对应类型：{type}，ID：{tmdb_id}页面不存在")
+                        f"<y>TMDB</y>：无效ID，ID：{tmdb_id}页面不存在")
                     return False
                 logger.opt(colors=True).info(
-                    f"<g>TMDB</g>：有效ID，对应类型：{type}，ID：{tmdb_id}页面存在")
+                    f"<g>TMDB</g>：ID验证成功，ID：{tmdb_id}页面存在")
                 return True
             except AppError.Exception as e:
                 if "404" in str(e) or "Not Found" in str(e):
                     logger.opt(colors=True).warning(
-                        f"<y>TMDB</y>：无效ID，对应类型：{type}，ID：{tmdb_id}页面不存在")
+                        f"<y>TMDB</y>：无效ID，ID：{tmdb_id}页面不存在")
                     return False
                 else:
                     logger.opt(colors=True).warning(

@@ -30,8 +30,9 @@ class AnimeProcess:
             self.tmdb_id = self.reformated_data.get("tmdb_id")  # 获取tmdb_id
             # 如果没有tmdb_id，则跳过后续处理
             if not self.tmdb_id:
-                raise AppError.Exception(
-                    AppError.ParamNotFound, "没有获取到TMDB ID，跳过后续处理")
+                logger.opt(colors=True).info(
+                    f"<g>{self.data_source.value}</g>：没有获取到TMDB ID, Anime数据处理将跳过 <g>跳过</g>")
+                return
             # 数据库查询,并转换为字典
             self.db_data = self._convert_db_tuple_to_dict(await self._get_data_from_database())
             # 数据合并

@@ -52,8 +52,15 @@ class PushService:
         except Exception as e:
             logger.opt(colors=True).error(
                 f"<r>Pusher</r>：{e}")
-        # 通过TMDB ID获取Anime库中的数据
-        anime_data = await self._get_data_from_anime_db()
+        # 判断TMDB ID是否为空
+        if not self.tmdb_id:
+            logger.opt(colors=True).warning(
+                f"<y>Pusher</y>：{self.source.value} 未配置TMDB ID")
+            anime_data = DatabaseTables.get_table_schema(
+                DatabaseTables.TableName.ANIME).copy()
+        else:
+            # 通过TMDB ID获取Anime库中的数据
+            anime_data = await self._get_data_from_anime_db()
         # 将获取到的数据汇总，筛选出推送数据
         picked_data, hybrid_image_queue, series_id = await self._data_pick(source_data, anime_data)
         # 对混合图片进行处理,获取图片数据
@@ -100,7 +107,7 @@ class PushService:
     def _get_tmdb_id(self, db_data) -> str | None:
         if not db_data:
             raise AppError.Exception(
-                AppError.ParamNotFound, "<r>Pusher</r>：意外的异常，数据库数据缺失")
+                AppError.ParamNotFound, "意外的异常，数据库数据缺失，无法获取TMDB ID")
         if self.source == DatabaseTables.TableName.ANI_RSS:
             return db_data.get("tmdb_id")
         elif self.source == DatabaseTables.TableName.EMBY:
@@ -109,12 +116,6 @@ class PushService:
             return None
 
     async def _get_data_from_anime_db(self):
-        # 判断是否有TMDB ID，没有则直接返回默认模板
-        if not self.tmdb_id:
-            logger.opt(colors=True).warning(
-                f"<y>Pusher</y>：{self.source.value} 未配置TMDB ID")
-            return DatabaseTables.get_table_schema(
-                DatabaseTables.TableName.ANIME).copy()
         # 通过TMDB ID获取Anime库中的数据，没有则返回默认模板
         try:
             anime_db_data = await self._search_in_animedb_by_tmdbid()

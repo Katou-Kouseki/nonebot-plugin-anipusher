@@ -34,11 +34,11 @@ class HealthCheck:
             self._load_custom_config()
             # 3 读取推送目标用户文件
             self._load_user_data()
+            logger.opt(colors=True).info("<g>HealthCheck</g>：配置载入：<g>PASS</g>")
             # 4 复制资源文件
             self._res_transfer()
             logger.opt(colors=True).info(
                 "<g>HealthCheck</g>：资源配置：<g>PASS</g>")
-            logger.opt(colors=True).info("<g>HealthCheck</g>：配置载入：<g>PASS</g>")
             # 5 创建网络测试任务
             self.connect_task = self._create_network_task()
             # 6 数据库检查
@@ -67,10 +67,10 @@ class HealthCheck:
     # 读取nonebot localstore路径到全局路径中
     def _load_localstore_path(self) -> None:
         WORKDIR.cache_dir = store.get_plugin_cache_dir()
-        WORKDIR.config_file = store.get_config_file(
-            plugin_name="nonebot-plugin-anipusher", filename="anipusheruser.json")
-        WORKDIR.data_file = store.get_data_file(
-            plugin_name="nonebot-plugin-anipusher", filename="anipusherdb.db")
+        WORKDIR.config_file = store.get_plugin_cache_file(
+            filename="anipusheruser.json")
+        WORKDIR.data_file = store.get_plugin_data_file(
+            filename="anipusherdb.db")
 
     # 读取用户配置文件
     def _load_custom_config(self) -> None:

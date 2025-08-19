@@ -67,7 +67,7 @@ class HealthCheck:
     # 读取nonebot localstore路径到全局路径中
     def _load_localstore_path(self) -> None:
         WORKDIR.cache_dir = store.get_plugin_cache_dir()
-        WORKDIR.config_file = store.get_plugin_cache_file(
+        WORKDIR.config_file = store.get_plugin_config_file(
             filename="anipusheruser.json")
         WORKDIR.data_file = store.get_plugin_data_file(
             filename="anipusherdb.db")

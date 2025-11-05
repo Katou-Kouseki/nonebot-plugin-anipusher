@@ -1,8 +1,15 @@
+from .schema_manager import get_table_names, get_default_schema
+from .db_operator import DatabaseOperator
 from .database_manager import DatabaseManager
-from .query_builder import SQLiteQueryBuilder
-from .table_structure import DatabaseTables
-from .db_health_check import DBHealthCheck
-from .dao import GeneralDatabaseOperate
 
-__all__ = ["DatabaseManager", "SQLiteQueryBuilder",
-           "DatabaseTables", "DBHealthCheck", "GeneralDatabaseOperate"]
+__all__ = [
+    # 核心操作接口（主要推荐使用）
+    "DatabaseOperator",
+
+    # 辅助函数
+    "get_table_names",
+    "get_default_schema",
+
+    # 高级/底层接口（供特殊场景使用）
+    "DatabaseManager"
+]

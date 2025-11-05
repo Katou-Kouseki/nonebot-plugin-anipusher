@@ -1,9 +1,7 @@
-from .tmdb_request import TmdbRequest
 from .requests import get_request
-from .image_verification import ImageVerification
+from .tmdb_api import TmdbApiRequest
 
 __all__ = [
     "get_request",
-    "TmdbRequest",
-    "ImageVerification"
+    "TmdbApiRequest"
 ]

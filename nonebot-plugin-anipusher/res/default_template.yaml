@@ -1,0 +1,75 @@
+# 消息模板配置
+# 支持静态文本、动态数据、条件显示等功能
+
+version: "1.0"
+description: "推送消息模板配置"
+
+template:
+  # 静态文本 - 总是显示
+  - content: "⬇️发现新的消息通知⬇️"
+    type: "static"
+    weight: 1  # 显示顺序权重
+
+  # 图片 - 必须存在时才显示
+  - content: "{image}"
+    field: "image"
+    type: "image"
+    weight: 2
+
+  # 标题 - 主要信息
+  - content: "🎞️ {title}"
+    field: "title"
+    type: "dynamic"
+    weight: 3
+
+  - content: "📺 集名 - {episode_title}"
+    field: "episode_title"
+    type: "dynamic"
+    weight: 4
+
+  - content: "🔢 分集 - {episode}"
+    field: "episode"
+    type: "dynamic"
+    weight: 5
+
+  # 更新时间
+  - content: "📅 日期 - {timestamp}"
+    field: "timestamp"
+    type: "dynamic"
+    weight: 6
+
+  # 评分 - 有评分时才显示
+  - content: "☑️ 评分 - {score}"
+    field: "score"
+    type: "dynamic"
+    weight: 7
+
+  # 操作类型
+  - content: "🔧 类型 - {action}"
+    field: "action"
+    type: "dynamic"
+    weight: 8
+
+  # 来源信息
+  - content: "✨ 来源 - {source}"
+    field: "source"
+    type: "dynamic"
+    weight: 9
+
+  # TMDB ID
+  - content: "🔗 编号 - {tmdb_id}"
+    field: "tmdb_id"
+    type: "dynamic"
+    weight: 10
+
+  # TAG
+  - content: "🔖 TAG - {genres}"
+    field: "genres"
+    type: "dynamic"
+    weight: 11
+
+  # 提及用户
+  - content: "📣 通知 - {at}"
+    field: "at"
+    type: "at"
+    weight: 12

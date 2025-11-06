@@ -6,7 +6,7 @@ description: "推送消息模板配置"
 
 template:
   # 静态文本 - 总是显示
-  - content: "⬇️发现新的消息通知⬇️"
+  - content: "⬇ 发现新的消息通知 ⬇"
     type: "static"
     weight: 1  # 显示顺序权重
 

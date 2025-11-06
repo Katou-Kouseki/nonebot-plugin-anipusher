@@ -58,7 +58,8 @@ class Monitor:
                                 headers={"Content-Type": "application/json"},
                                 content="ok")
             # 异步启动数据处理流程，不阻塞响应返回
-            asyncio.create_task(DataProcessor.create_and_execute(received_data))
+            asyncio.create_task(
+                DataProcessor.create_and_execute(received_data))
             return response
 
         # 检查驱动是否支持ASGI协议（HTTP服务器功能）

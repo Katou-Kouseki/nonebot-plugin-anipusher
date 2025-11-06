@@ -72,10 +72,6 @@ class ConfigLoader:
             WORKDIR.data_file = store.get_plugin_data_file(
                 filename="anipusherdb.db")
             WORKDIR.message_template_dir = store.get_plugin_data_dir() / "message_template"
-            logger.opt(colors=True).debug(f"WORKDIR.cache_dir: {WORKDIR.cache_dir}")
-            logger.opt(colors=True).debug(f"WORKDIR.config_file: {WORKDIR.config_file}")
-            logger.opt(colors=True).debug(f"WORKDIR.data_file: {WORKDIR.data_file}")
-            logger.opt(colors=True).debug(f"WORKDIR.message_template_dir: {WORKDIR.message_template_dir}")
         except Exception as e:
             AppError.ResourceNotFound.raise_(
                 f"Nonebot localstore配置路径加载异常 —— {e}")
@@ -95,10 +91,6 @@ class ConfigLoader:
             APPCONFIG.emby_key = config.emby_key
             APPCONFIG.tmdb_authorization = config.tmdb_authorization
             APPCONFIG.proxy = config.proxy
-            logger.opt(colors=True).debug(f"APPCONFIG.emby_host:{APPCONFIG.emby_host}")
-            logger.opt(colors=True).debug(f"APPCONFIG.emby_key:{APPCONFIG.emby_key}")
-            logger.opt(colors=True).debug(f"APPCONFIG.tmdb_authorization:{APPCONFIG.tmdb_authorization}")
-            logger.opt(colors=True).debug(f"APPCONFIG.proxy:{APPCONFIG.proxy}")
         except ValidationError as e:
             logger.opt(colors=True).error(
                 "<r>HealthCheck</r>:配置读取异常!请确认env文件是否已配置")
@@ -160,10 +152,6 @@ class ConfigLoader:
             raise
         except Exception as e:
             AppError.ConfigFileReadError.raise_(f"{e}")
-        logger.opt(colors=True).debug(
-            f"PUSHTARGET.GroupPushTarget: {PUSHTARGET.GroupPushTarget}")
-        logger.opt(colors=True).debug(
-            f"PUSHTARGET.PrivatePushTarget: {PUSHTARGET.PrivatePushTarget}")
 
     def _reset_pushtarget_data(self) -> None:
         """重建用户推送目标配置文件
@@ -181,8 +169,6 @@ class ConfigLoader:
                 AppError.ResourceNotFound.raise_("项目缓存目录缺失")
             if not WORKDIR.config_file.parent.is_dir():
                 WORKDIR.config_file.parent.mkdir(parents=True)
-            WORKDIR.config_file.write_text(json.dumps(
-                {"GroupPushTarget": {}, "PrivatePushTarget": {}}, ensure_ascii=False), encoding="utf-8")
             logger.opt(colors=True).info(
                 f"<g>HealthCheck</g>:用户数据文件已重建于:{WORKDIR.config_file}")
         except PermissionError as e:

@@ -168,8 +168,8 @@ async def register_anirss(event: PrivateMessageEvent | GroupMessageEvent):
             with open(WORKDIR.config_file, 'w', encoding='utf-8') as file:
                 json.dump(data, file, ensure_ascii=False, indent=4)
             logger.opt(colors=True).info(
-                f"<c>COMMAND</c>:群组 <c>{group_id}</c> 已成功启用AniRSS推送功能")
-            await register_anirss_push.finish(f"群组 {event.group_id} 已成功启用AniRSS推送功能")
+                f"<c>COMMAND</c>:群组 <c>{group_id}</c> 启用AniRSS推送功能 —— SUCCESS")
+            await register_anirss_push.finish(f"群组 {event.group_id} 启用AniRSS推送功能 —— SUCCESS")
     except FinishedException:
         raise
     except Exception as e:

@@ -91,7 +91,8 @@ class PushManager:
                 logger.opt(colors=True).info(
                     f"<y>{self.source.value}</y>:未查询到未发送数据")
                 return
-            unsend_data = convert_db_list_first_row_to_dict(self.source, selected_data)
+            unsend_data = convert_db_list_first_row_to_dict(
+                self.source, selected_data)
         except Exception as e:
             logger.opt(exception=True).error(
                 f"<r>PUSHER:</r>{e}")
@@ -114,13 +115,15 @@ class PushManager:
             if self.tmdb_id == 0:
                 logger.opt(colors=True).warning(
                     "<y>PUSHER</y>:未获取到有效的TMDB ID 跳过查询ANIME数据库")
-                anime_db_data = schema_manager.get_default_schema(TableName.ANIME).copy()
+                anime_db_data = schema_manager.get_default_schema(
+                    TableName.ANIME).copy()
             else:
                 anime_selected_data = await self._select_anime_data_from_db()
                 if not anime_selected_data:
                     logger.opt(colors=True).warning(
                         f"<y>PUSHER</y>:数据库中未查询到 TMDB ID: <c>{self.tmdb_id}</c> 对应条目")
-                    anime_db_data = schema_manager.get_default_schema(TableName.ANIME).copy()
+                    anime_db_data = schema_manager.get_default_schema(
+                        TableName.ANIME).copy()
                 else:
                     anime_db_data = convert_db_list_first_row_to_dict(TableName.ANIME,
                                                                       anime_selected_data)
@@ -129,7 +132,8 @@ class PushManager:
                 f"<r>PUSHER:</r>{e}")
             logger.opt(colors=True).error(
                 "<r>PUSHER:</r>获取对应ANIME数据库数据 <r>失败</r> —— 跳过此部分数据")
-            anime_db_data = schema_manager.get_default_schema(TableName.ANIME).copy()
+            anime_db_data = schema_manager.get_default_schema(
+                TableName.ANIME).copy()
         try:
             try:
                 picker = DataPicker(self.source, unsend_data, anime_db_data)
@@ -147,7 +151,7 @@ class PushManager:
         try:
             image_queue = message_params.get("image_queue", [])
             try:
-                image_selector = ImageSelector(image_queue, self.tmdb_id)
+                image_selector = ImageSelector(image_queue, str(self.tmdb_id))
                 image_path = await image_selector.select()
             except Exception as e:
                 AppError.ImageSelectorCreateError.raise_(f"{str(e)}")
@@ -160,7 +164,8 @@ class PushManager:
         # todo：未来改造为可变的消息参数
         message_params["image"] = image_path
         try:
-            private_push_target, group_push_target = self._pushtarget_conflate(message_params)
+            private_push_target, group_push_target = self._pushtarget_conflate(
+                message_params)
         except Exception as e:
             logger.opt(exception=True).error(
                 f"<r>PUSHER:</r>{e}")
@@ -180,7 +185,7 @@ class PushManager:
                 "<r>PUSHER</r>:更新数据发送状态 <r>失败</r> —— 推送流程 <r>中断</r>")
             return
 
-    async def _select_unsend_data_from_db(self) -> tuple:
+    async def _select_unsend_data_from_db(self) -> list:
         """
         从数据库中选择未发送的数据
         Returns:
@@ -202,13 +207,14 @@ class PushManager:
         except AppError.Exception:
             raise
         except Exception as e:
-            AppError.DatabaseQueryError.raise_(f"{self.source.value}数据库查询失败: {str(e)}")
+            AppError.DatabaseQueryError.raise_(
+                f"{self.source.value}数据库查询失败: {str(e)}")
 
-    async def _select_anime_data_from_db(self) -> tuple:
+    async def _select_anime_data_from_db(self) -> list:
         """
         从ANIME数据库中选择相关动漫数据
         Returns:
-            tuple: 查询到的动漫数据元组
+
         Raises:
             AppError.MissingParameter: 当未提供有效TMDB ID时
             AppError.DatabaseQueryError: 当数据库查询失败时
@@ -219,7 +225,8 @@ class PushManager:
                     "获取ANIME数据库数据失败 —— 未提供有效的TMDB ID")
             db_operator = DatabaseOperator()
             return await db_operator.select_data(table_name=TableName.ANIME,
-                                                 where={"tmdb_id": self.tmdb_id},
+                                                 where={
+                                                     "tmdb_id": self.tmdb_id},
                                                  limit=1)
         except AppError.Exception:
             raise
@@ -259,19 +266,25 @@ class PushManager:
             AppError.PushTargetMergeError: 当合并推送目标失败时
         """
         try:
-            private_subscribers = picked_params.get("private_subscribers", []) or []  # 私聊订阅者
-            group_subscribers = picked_params.get("group_subscribers", {}) or {}  # 群组订阅者
-            private_pusher_user = PUSHTARGET.PrivatePushTarget.get(self.source.value, []) or []  # 私聊推送用户
-            group_pusher_user = PUSHTARGET.GroupPushTarget.get(self.source.value, []) or []  # 群组推送用户
+            private_subscribers = picked_params.get(
+                "private_subscribers", []) or []  # 私聊订阅者
+            group_subscribers = picked_params.get(
+                "group_subscribers", {}) or {}  # 群组订阅者
+            private_pusher_user = PUSHTARGET.PrivatePushTarget.get(
+                self.source.value, []) or []  # 私聊推送用户
+            group_pusher_user = PUSHTARGET.GroupPushTarget.get(
+                self.source.value, []) or []  # 群组推送用户
             # 计算私聊推送目标：筛选在配置中的用户
             private_pusher_user_set = set(map(str, private_pusher_user))
             private_subscribers_str = set(map(str, private_subscribers))
-            private_push_target = list(private_subscribers_str & private_pusher_user_set)
+            private_push_target = list(
+                private_subscribers_str & private_pusher_user_set)
             # 计算群组推送目标：筛选在配置中的群组
             group_pusher_user_set = set(map(str, group_pusher_user))
             group_push_target = {}
             for group_id in group_pusher_user_set:
-                group_push_target[group_id] = group_subscribers.get(group_id, []) or group_subscribers.get(int(group_id), []) or []
+                group_push_target[group_id] = group_subscribers.get(
+                    group_id, []) or group_subscribers.get(int(group_id), []) or []
             return private_push_target, group_push_target
         except AppError.Exception:
             raise
@@ -321,12 +334,10 @@ class PushManager:
             base_message = message_renderer.render_base(message_params)
             logger.opt(colors=True).info(
                 "<g>PUSHER</g>:基础消息渲染  |<g>COMPLETE</g>")
-            for group_id in group_push_target.items():
+            for group_id, subscriber in group_push_target.items():
+                message_params["at"] = subscriber  # 设置当前群组的@用户列表
                 at_message = message_renderer.render_at(message_params)
-                if at_message:
-                    print(at_message)
                 message = base_message + at_message
-                print(message)
                 await group_msg_pusher(message, [group_id])
             logger.opt(colors=True).info(
                 "<g>PUSHER</g>:群组推送        |<g>COMPLETE</g>")

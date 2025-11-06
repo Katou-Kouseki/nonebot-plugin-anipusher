@@ -13,7 +13,6 @@
 """
 
 # 第三方库
-from ast import If
 import yaml
 from pathlib import Path
 from typing import Optional
@@ -191,7 +190,7 @@ class MessageRenderer:
         except Exception as e:
             AppError.MessageRenderError.raise_(f"at消息渲染失败: {e}")
 
-    def _line_render(self, item: dict, data: dict | None) -> MessageSegment | Message | None:
+    def _line_render(self, template: dict, data: dict | None) -> MessageSegment | Message | None:
         """
         渲染单条消息行，支持多种消息类型的渲染
         Args:
@@ -203,9 +202,9 @@ class MessageRenderer:
         Raises:
             AppError.MissingParameter: 当缺少必要参数或占位符不匹配时
         """
-        content = item.get("content")  # 静态消息内容或动态消息字段
-        field = item.get("field")  # 动态消息字段
-        type = item.get("type")  # 消息类型
+        content = template.get("content")  # 静态消息内容或动态消息字段
+        field = template.get("field")  # 动态消息字段
+        type = template.get("type")  # 消息类型
         if not content:
             AppError.MissingParameter.raise_("没有可渲染的消息内容")
         if not type:
@@ -240,11 +239,14 @@ class MessageRenderer:
             return MessageSegment.text(rendered_content + "\n")
         elif type == "at":
             at_message = Message()
-            placeholder = f"{{{field}}}"
+            placeholder = f"{{{field}}}"  # 占位符配置
+            if placeholder not in content:
+                AppError.MissingParameter.raise_(
+                    f"模板中未提供占位符 <c>{placeholder}</c> 请检查模板配置")
             at_list = (data or {}).get(field) or []
             if at_list:
                 at_message.append(MessageSegment.text(
-                    content.rstrip(placeholder)))
+                    "\n" + content.rstrip(placeholder)))
                 for user in at_list:
                     at_message.append(MessageSegment.at(user))
             return at_message

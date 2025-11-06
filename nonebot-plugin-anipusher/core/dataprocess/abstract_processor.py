@@ -99,6 +99,7 @@ class AbstractDataProcessor(ABC):
         logger.opt(colors=True).info(
             f"<g>{self.source.value}</g>:TMDB ID: <c>{self.tmdb_id}</c> 数据处理 |<g>SUCCESS</g>")
         try:
+            logger.opt(colors=True).info("————————————— 推送服务进行中 —————————————")
             await self._push()
             logger.opt(colors=True).info(
                 f"<g>{self.source.value}</g>:TMDB ID: <c>{self.tmdb_id}</c> 数据推送 |<g>SUCCESS</g>")

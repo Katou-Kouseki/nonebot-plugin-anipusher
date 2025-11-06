@@ -20,11 +20,11 @@ async def launch():
     这种设计确保了系统依赖的正确加载顺序，并且在初始化失败时能够安全地退出启动流程。
     """
     # 导入初始化器并执行系统初始化
-    from .initialize.initializer import Initializer
-    initializer = await Initializer.create_and_run()
+    from .initialize import initializer
+    initialize_ = await initializer.Initializer.create_and_run()
     # 检查初始化状态，如果初始化失败则不再继续启动后续服务
-    if not initializer.is_ready:
+    if not initialize_.is_ready:
         return
     # 初始化成功后，导入并启动监控服务
-    from .core import Monitor
+    from .core.monitor import Monitor
     await Monitor.create_and_run()

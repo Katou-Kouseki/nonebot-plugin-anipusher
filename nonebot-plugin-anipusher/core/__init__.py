@@ -5,5 +5,6 @@ __all__ = [
     "AbstractDataProcessor",
     "Monitor",
     "function",
-    "subscribe"
+    "subscribe",
+
 ]

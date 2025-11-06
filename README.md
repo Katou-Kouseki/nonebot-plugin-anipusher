@@ -18,6 +18,8 @@ NoneBot AniPusher插件 是将特定Webhooks消息推送至QQ的插件<br>
 [![python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 </div>
 
+> [!IMPORTANT]
+> 重大更新，请务必查看新的配置方式与功能列表
 
 ## 📖 介绍
 
@@ -64,7 +66,7 @@ AniPusher插件 是将特定Webhook消息推送至QQ的插件<br>
 
 打开 nonebot2 项目根目录下的 `pyproject.toml` 文件, 在 `[tool.nonebot]` 部分追加写入
 
-    plugins = ["nonebot_plugin_AniPusher"]
+    plugins = ["nonebot-plugin-anipusher"]
 
 </details>
 
@@ -114,7 +116,7 @@ URL为Nonebot2的IP地址和端口下的路径`/webhook`<br>
 首先请确保你已在Emby服务器上安装了Webhooks插件（该插件目前已自动集成，应该不用再手动装了）<br>
 
 `Emby → 设置 → 通知 → 添加通知 -> Webhooks`<br>
-↓按如下配置↓<br>
+按如下配置<br>
 ![embv-config](./docs/emby-config.png)
 
 网址为Nonebot2的IP地址和端口下的路径`/webhook`<br>
@@ -127,26 +129,31 @@ Event目前只支持`媒体库-新媒体已添加`<br>
 ## ⚙️ 插件配置
 
 配置项位于 nonebot2 项目根目录下的 `.env` 文件内<br>
-运行时如果没有检查到配置项，插件将自动在`.env` 文件内创建配置项，前往按照说明填入即可。<br>
-所有配置项均为非必选项，但建议填写。配置项缺失会导致对应功能被关闭。<br>
+如果没有配置插件项插件会自动跳过载入。<br>
+请至少配置空插件项（如下图所示）<br>
+![env](./docs/env-config.png)
 
 > [!IMPORTANT]
-> 缺少Emby_Host或Emby_ApiKey时，插件将无法验证视觉图有效性，不会下载或更新封面图片。<br>
-> 缺少Tmdb_ApiKey时，插件将无法验证TMDB ID,导致数据无法存入数据库，无法订阅对应内容。<br>
-> 缺少Tmdb_Proxy时，插件将仅尝试直连TMDB API,如失败则无法验证TMDB ID,导致数据无法存入数据库，无法订阅对应内容。<br>
+> 缺少anipusher__emby_host或anipusher__emby_key会导致无法下载Emby服务器上的图片，其他渠道图片依旧可用<br>
+> 缺少anipusher__tmdb_authorization时，插件将无法验证TMDB ID,导致数据无法存入综合数据库并且无法使用订阅命令。<br>
+> 缺少anipusher__proxy时，插件会在初始化时尝试直连TMDB，如果连接测试失败，TMDB相关功能也会关闭。<br>
 
 | 配置项 | 必填 | 默认值 | 说明 |
 |:----|:----:|:----:|:----:|
-| anipush__emby_host | 否 | 无 | Emby的服务器地址（请勿填写中转地址）|
-| anipush__emby_apikey | 否 | 无 | Emby服务器-高级-API密钥中生成的密钥 |
-| anipush__tmdb_apikey | 否 | 无 | TMDB用户的ApiKey|
-| anipush__tmdb_proxy | 否 | 无 | TMDB代理，如不填写则不使用代理 |
+| anipusher__emby_host | 否 | 无 | Emby的服务器地址（请勿填写中转地址）|
+| anipusher__emby_key | 否 | 无 | Emby服务器-高级-API密钥中生成的密钥 |
+| anipusher__tmdb_authorization | 否 | 无 | TMDB用户的ApiKey|
+| anipusher__proxy | 否 | 无 | TMDB代理，如不填写则不使用代理 |
 
 ## 🎉 使用
 ### 指令表
 | 指令 | 权限 | 需要@ | 范围 | 说明 |
 |:-----|:----:|:----:|:----:|:----|
-| 注册Emby推送 | ALL | 否 | 私聊/群聊 | 群聊：发送指令后即将群组添加到Emby更新消息推送列表中，有新消息时将消息推送到群内<br>私聊：发送指令后即将用户添加到Emby更新消息推送列表中 |
-| 注册AniRSS推送 | ALL | 否 | 私聊/群聊 | 群聊：发送指令后即将群组添加到AniRSS更新消息推送列表中，有新消息时将消息推送到群内<br>私聊：发送指令后即将用户添加到AniRSS更新消息推送列表中 |
-| 取消Emby推送 | ALL | 否 | 私聊/群聊 | 群聊：发送指令后关闭群组更新消息推送，不再接收推送<br>私聊：发送指令后关闭用户更新消息推送，不再接收推送 |
+| 启用EMBY推送 | ALL | 否 | 私聊/群聊 | 群聊：发送指令后即将群组添加到Emby更新消息推送列表中，有新消息时将消息推送到群内<br>私聊：发送指令后即将用户添加到Emby更新消息推送列表中 |
+| 启用AniRSS推送 | ALL | 否 | 私聊/群聊 | 群聊：发送指令后即将群组添加到AniRSS更新消息推送列表中，有新消息时将消息推送到群内<br>私聊：发送指令后即将用户添加到AniRSS更新消息推送列表中 |
+| 取消EMBY推送 | ALL | 否 | 私聊/群聊 | 群聊：发送指令后关闭群组更新消息推送，不再接收推送<br>私聊：发送指令后关闭用户更新消息推送，不再接收推送 |
 | 取消AniRSS推送 | ALL | 否 | 私聊/群聊 | 群聊：发送指令后关闭群组更新消息推送，不再接收推送<br>私聊：发送指令后关闭用户更新消息推送，不再接收推送 |
+| 屏蔽推送 | ALL | 否 | 私聊/群聊 | 任何范围用户发送命令后,推送服务将被暂停,但记录服务仍在运行，使用重启推送命令后重启 |
+| 重启推送 | ALL | 否 | 私聊/群聊 | 任何范围用户发送命令后,插件会重载推送对象，重启推送服务 |
+| 订阅/取消订阅 | ALL | 否 | 私聊/群聊 | 群聊：使用订阅/取消订阅命令后在群组推送时会@您，私聊：程序只会在EMBY/ANISS推送功能开启时推送您订阅的番剧更新信息，没有订阅的则不会推送 |
+

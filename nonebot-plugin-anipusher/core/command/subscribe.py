@@ -37,6 +37,8 @@ async def handle_subscribe(
             logger.opt(colors=True).warning("<c>COMMAND</c>: 等待输入超时,对话已结束")
             await subscribe.finish("等待输入超时,对话已结束")
     try:
+        logger.opt(colors=True).info(
+            f"<c>COMMAND</c>: 用户输入订阅对象 —— {user_input}")
         subscribe_process = SubscribeProcess(user_input, event, matcher, "add")
         await subscribe_process.add_process()
     except FinishedException:
@@ -65,6 +67,8 @@ async def handle_remove_subscribe(
             logger.opt(colors=True).warning("<c>COMMAND</c>: 等待输入超时,对话已结束")
             await remove_subscribe.finish("等待输入超时,对话已结束")
     try:
+        logger.opt(colors=True).info(
+            f"<c>COMMAND</c>: 用户输入取消订阅对象 —— {user_input}")
         remove_subscribe_process = SubscribeProcess(
             user_input, event, matcher, "remove")
         await remove_subscribe_process.remove_process()
@@ -133,6 +137,8 @@ class SubscribeProcess:
             logger.opt(colors=True).error(
                 f"<r>COMMAND</r>: 更新数据库记录失败 —— {e} ")
             await self.matcher.finish("订阅失败 —— 更新数据库记录出现错误")
+        logger.opt(colors=True).info(
+            f"<c>COMMAND</c>: 用户订阅成功 —— TMDB ID: {self.tmdb_id}")
         if self.user_choice is None:
             await self.matcher.finish(f"订阅TMDB ID: {self.tmdb_id} 成功,更新时会通过您的订阅来源@通知你")
         await self.matcher.finish(f"订阅{extracted_data[self.user_choice - 1]['title']}(TMDB ID: {self.tmdb_id})成功,更新时会通过您的订阅来源@通知你")
@@ -178,6 +184,8 @@ class SubscribeProcess:
             logger.opt(colors=True).error(
                 f"<r>COMMAND</r>: 更新数据库记录失败 —— {e} ")
             await self.matcher.finish("取消订阅失败 —— 更新数据库记录出现错误")
+        logger.opt(colors=True).info(
+            f"<c>COMMAND</c>: 用户取消订阅成功 —— TMDB ID: {self.tmdb_id}")
         if self.user_choice is None:
             await self.matcher.finish(f"取消订阅TMDB ID: {self.tmdb_id}成功,更新时不会再通过您的订阅来源@通知您")
         await self.matcher.finish(f"取消订阅{extracted_data[self.user_choice - 1]['title']}(TMDB ID: {self.tmdb_id})成功,更新时不会再通过您的订阅来源@通知您")

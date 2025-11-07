@@ -268,14 +268,20 @@ class SubscribeProcess:
                                               matcher=self.matcher,
                                               timeout=60)
             if not id_input:
+                logger.opt(colors=True).info(
+                    "<c>COMMAND</c>: 用户未在规定时间内输入,对话已终止")
                 await self.matcher.finish("输入超时,对话已终止")
             id = int(id_input.extract_plain_text())
             if id == 0:
+                logger.opt(colors=True).info(
+                    "<c>COMMAND</c>: 用户选择取消操作,对话已终止")
                 await self.matcher.finish("已取消操作")
             if self.choice_type == "add":
                 await self.matcher.send(f"已确认{extracted_data[id - 1]['title']}(TMDB ID: {extracted_data[id - 1]['tmdb_id']}), 尝试添加到订阅列表...")
             elif self.choice_type == "remove":
                 await self.matcher.send(f"已确认{extracted_data[id - 1]['title']}(TMDB ID: {extracted_data[id - 1]['tmdb_id']}), 尝试从订阅列表移除...")
+            logger.opt(colors=True).info(
+                f"<c>COMMAND</c>: 用户选择订阅项序号为: <c>{id}</c> —— TMDB ID: {extracted_data[id - 1]['tmdb_id']}")
             self.tmdb_id = extracted_data[id - 1]["tmdb_id"]
             self.user_choice = id
 
@@ -299,6 +305,8 @@ class SubscribeProcess:
                         TableName.ANIME)
                     db_structured_data["tmdb_id"] = self.tmdb_id
                 elif self.choice_type == "remove":
+                    logger.opt(colors=True).warning(
+                        "<c>COMMAND</c>: 本地数据库中没有该动画/剧集的记录, 无法取消订阅")
                     await self.matcher.finish("本地数据库中没有该动画/剧集的记录，没有需要移除的订阅，操作已取消")
             else:
                 db_structured_data = convert_db_list_first_row_to_dict(
@@ -334,14 +342,20 @@ class SubscribeProcess:
                             str(self.event.user_id))
                         db_structured_data["group_subscriber"] = group_subscriber
                     else:
+                        logger.opt(colors=True).info(
+                            "<c>COMMAND</c>: 用户已订阅该动画/剧集, 无需重复订阅")
                         await self.matcher.finish("你已订阅该动画/剧集, 无需重复订阅")
             elif isinstance(self.event, PrivateMessageEvent):
                 if str(self.event.user_id) not in private_subscriber:
                     private_subscriber.append(str(self.event.user_id))
                     db_structured_data["private_subscriber"] = private_subscriber
                 else:
+                    logger.opt(colors=True).info(
+                        "<c>COMMAND</c>: 用户已订阅该动画/剧集, 无需重复订阅")
                     await self.matcher.finish("你已订阅该动画/剧集, 无需重复订阅")
             else:
+                logger.opt(colors=True).warning(
+                    "<c>COMMAND</c>: 异常的事件类型，无法添加订阅用户")
                 await self.matcher.finish("异常的事件类型，无法添加订阅用户")
             return db_structured_data
         except FinishedException:

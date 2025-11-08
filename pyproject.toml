@@ -1,6 +1,6 @@
 [project]
 name = "nonebot-plugin-anipusher"
-version = "0.5.0"
+version = "0.5.1"
 description = "NoneBot plugin for pushing ani-rss/emby webhooks to QQ"
 authors = [{ name = "AriadusTT", email = "980868243@qq.com" }]
 license = { text = "MIT" }
@@ -11,11 +11,10 @@ dependencies = [
     # nonebot 插件（按字母顺序）
     "nonebot-plugin-apscheduler",
     "nonebot-plugin-waiter",
+    "nonebot-plugin-localstore",
     # 异步网络和数据库
     "aiohttp>=3.11.14",
     "aiosqlite>=0.19.0",
-    # Web 框架
-    "fastapi>=0.115.0",
     # 数据库工具
     "DBUtils>=3.1.0",
     # 配置和环境变量

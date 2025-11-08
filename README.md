@@ -30,7 +30,10 @@ AniPusher插件 是将特定Webhook消息推送至QQ的插件<br>
 ![show](./docs/show.png)
 
 ## 💿 安装
+任选一种方式安装即可<br>
+安装完成后打开 nonebot2 项目根目录下的 `pyproject.toml` 文件, 在 `[tool.nonebot]` 部分追加写入
 
+    plugins = ["nonebot-plugin-anipusher"]
 <details open>
 <summary>使用 nb-cli 安装</summary>
 在 nonebot2 项目的根目录下打开命令行, 输入以下指令即可安装
@@ -63,14 +66,10 @@ AniPusher插件 是将特定Webhook消息推送至QQ的插件<br>
 
     conda install nonebot-plugin-anipusher
 </details>
-
-打开 nonebot2 项目根目录下的 `pyproject.toml` 文件, 在 `[tool.nonebot]` 部分追加写入
-
-    plugins = ["nonebot-plugin-anipusher"]
-
 </details>
 
-## ⚙️ ani-rss配置[[ani-rss项目地址](https://github.com/wushuo894/ani-rss)]
+
+## ⚙️ ani-rss配置[[ani-rss](https://github.com/wushuo894/ani-rss)]
 该配置方法基于ani-rss `v2.0.13` 更新后新的通知配置功能<br>
 
 `ani-rss → 设置 → 通知 → 添加通知`<br>

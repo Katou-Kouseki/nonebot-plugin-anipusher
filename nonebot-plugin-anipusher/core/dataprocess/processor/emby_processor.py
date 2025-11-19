@@ -394,7 +394,7 @@ class EmbyDataProcessor(AbstractDataProcessor):
                 tmdb_id = None
                 return tmdb_id, imdb_id, tvdb_id
             try:
-                if tmdb_id:
+                if tmdb_id and tmdb_id != "None":
                     if await self._verify_id_from_response(tmdb_id, item_type):
                         logger.opt(colors=True).info(
                             f"<g>TMDB</g>:验证TMDB ID <g>SUCCESS</g> —— TMDB ID:<b>{tmdb_id}</b>")

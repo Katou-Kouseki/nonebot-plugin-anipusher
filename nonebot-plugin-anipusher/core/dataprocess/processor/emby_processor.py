@@ -32,6 +32,7 @@ class EmbyDataProcessor(AbstractDataProcessor):
     通过装饰器注册到EMBY数据源，负责处理EMBY webhook数据的格式化和提取。
     支持提取媒体标题、描述、评分、ID等信息，并可进行TMDB ID验证和转换。
     """
+
     async def _reformat(self):
         """
         重新格式化EMBY webhook数据
@@ -52,7 +53,8 @@ class EmbyDataProcessor(AbstractDataProcessor):
         except Exception as e:
             raise e
         try:
-            default_schema = schema_manager.get_default_schema(TableName.EMBY).copy()
+            default_schema = schema_manager.get_default_schema(
+                TableName.EMBY).copy()
         except Exception as e:
             raise e
         try:
@@ -124,6 +126,7 @@ class EmbyDataProcessor(AbstractDataProcessor):
         数据提取辅助类
         负责从EMBY webhook原始数据中提取各种媒体信息字段。
         """
+
         def __init__(self, data: dict):
             """
             初始化数据提取类
@@ -392,7 +395,6 @@ class EmbyDataProcessor(AbstractDataProcessor):
                 return tmdb_id, imdb_id, tvdb_id
             try:
                 if tmdb_id:
-                    tmdb_id = int(tmdb_id)
                     if await self._verify_id_from_response(tmdb_id, item_type):
                         logger.opt(colors=True).info(
                             f"<g>TMDB</g>:验证TMDB ID <g>SUCCESS</g> —— TMDB ID:<b>{tmdb_id}</b>")
@@ -670,7 +672,7 @@ class EmbyDataProcessor(AbstractDataProcessor):
                     f"<y>EMBY</y>:{e}")
                 return None
 
-        async def _verify_id_from_response(self, tmdb_id: int, type: Literal["Movie", "Episode", "Series"]) -> bool:
+        async def _verify_id_from_response(self, tmdb_id: str, type: Literal["Movie", "Episode", "Series"]) -> bool:
             """
             验证TMDB ID是否存在
             通过TMDB API验证提供的ID是否有效。

@@ -75,7 +75,7 @@ class TmdbApiRequest:
         return await TmdbApiRequest._request_tmdb_api(endpoint)
 
     @staticmethod
-    async def get_id_details(id: int, type: Literal["Movie", "Episode", "Series"] = "Episode") -> dict | None:
+    async def get_id_details(id: str, type: Literal["Movie", "Episode", "Series"] = "Episode") -> dict | None:
         """异步获取ID的详细信息"""
         if not id:
             AppError.MissingParameter.raise_(

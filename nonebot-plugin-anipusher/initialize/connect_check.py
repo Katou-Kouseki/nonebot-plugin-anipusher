@@ -129,7 +129,7 @@ class ConnectChecker:
             }
             if not success:
                 logger.opt(colors=True).debug(
-                    f"<y>HealthCheck</y>:{task_name}连接失败,错误类型:{type(res).__name__}")
+                    f"<y>HealthCheck</y>:{task_name}连接失败 —— {type(res).__name__}")
         return parsed
 
     async def start_check(self) -> dict:

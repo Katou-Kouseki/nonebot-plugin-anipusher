@@ -11,6 +11,7 @@ EMBY数据处理器模块
 import asyncio
 import json
 import re
+import aiohttp
 from typing import Any, Literal
 # 第三方库
 from nonebot import logger
@@ -691,10 +692,10 @@ class EmbyDataProcessor(AbstractDataProcessor):
                     return False
                 return True
             except AppError.Exception as e:
-                if e.error_code == 3000:
-                    return False
                 logger.opt(colors=True).warning(
-                    f"<y>TMDB</y>: TMDB ID 验证 <r>FAIL</r> —— {e}")
+                    f"<y>TMDB</y>:TMDB API 验证 ID {tmdb_id} <r>FAIL</r> —— {e}")
+                return False
+            except aiohttp.ClientError:
                 return False
             except Exception as e:
                 AppError.UnknownError.raise_(f"TMDB ID 验证失败 —— {e}")

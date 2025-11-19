@@ -52,7 +52,7 @@ class PushManager:
             source: 数据来源表名枚举
         """
         self.source: TableName = source
-        self.tmdb_id: int = 0
+        self.tmdb_id: int | None = None
         self.unsend_data_id = None
 
     @classmethod
@@ -112,9 +112,9 @@ class PushManager:
             return
         try:
             self.tmdb_id = self._get_tmdb_id(unsend_data)
-            if self.tmdb_id == 0:
+            if self.tmdb_id is None:
                 logger.opt(colors=True).warning(
-                    "<y>PUSHER</y>:未获取到有效的TMDB ID 跳过查询ANIME数据库")
+                    "<y>PUSHER</y>:未获取到有效的TMDB ID 跳过ANIME数据库查询")
                 anime_db_data = schema_manager.get_default_schema(
                     TableName.ANIME).copy()
             else:
@@ -233,7 +233,7 @@ class PushManager:
         except Exception as e:
             AppError.DatabaseQueryError.raise_(f"ANIME数据库查询失败: {str(e)}")
 
-    def _get_tmdb_id(self, data: dict) -> int:
+    def _get_tmdb_id(self, data: dict) -> int | None:
         """
         从数据中提取TMDB ID
         Args:
@@ -248,9 +248,15 @@ class PushManager:
             if not data:
                 AppError.MissingParameter.raise_(
                     "获取TMDB ID失败 —— 未提供有效的未发送数据")
-            return int(data.get("tmdb_id", 0) or 0)
-        except AppError.Exception:
-            raise
+            tmdb_id_value = data.get("tmdb_id", None)
+            if tmdb_id_value == "None" or tmdb_id_value is None:
+                return None
+            try:
+                return int(tmdb_id_value)
+            except (ValueError, TypeError):
+                logger.opt(colors=True).warning(
+                    f"<y>PUSHER</y>:TMDB ID 格式错误，请检查数据 —— TMDB ID: <c>{tmdb_id_value}</c> TYPE: <c>{type(tmdb_id_value).__name__}</c>")
+                return None
         except Exception as e:
             AppError.TmdbIdFetchError.raise_(f"{str(e)}")
 

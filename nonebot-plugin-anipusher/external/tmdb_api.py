@@ -44,10 +44,9 @@ class TmdbApiRequest:
             if not isinstance(response, str):
                 AppError.InvalidHttpResponse.raise_(
                     "返回数据类型错误！")
-        except aiohttp.ClientError as e:
-            AppError.NetworkConnectionFailed.raise_(
-                f"网络请求失败: {str(e)}")
         except AppError.Exception as e:
+            raise e
+        except aiohttp.ClientError as e:
             raise e
         except Exception as e:
             AppError.ApiRequestError.raise_(

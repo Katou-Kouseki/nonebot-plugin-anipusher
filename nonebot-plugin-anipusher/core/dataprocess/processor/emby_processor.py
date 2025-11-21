@@ -76,7 +76,7 @@ class EmbyDataProcessor(AbstractDataProcessor):
             episode_title = extract.extract_episode_title(item_type, item)
             genres = extract.extract_genres(item)
             score = extract.extract_score(item_type, item)
-            tmdb_id, imdb_id, tvdb_id = await extract.extract_id(item_type, item)
+            tmdb_id, imdb_id, tvdb_id = await extract.extract_id(title, item_type, item)
             series_id = extract.extract_series_id(item_type, item)
             episode_id = extract.extract_episode_id(item_type, item)
             series_tag = extract.extract_series_tag(item_type, item)
@@ -361,11 +361,12 @@ class EmbyDataProcessor(AbstractDataProcessor):
                     f"<y>EMBY</y>:{e}")
                 return None
 
-        async def extract_id(self, item_type, item):
+        async def extract_id(self, title, item_type, item):
             """
             提取媒体ID
             提取并验证TMDB ID，如果TMDB ID无效或不存在，尝试将IMDB或TVDB ID转换为TMDB ID。
             Args:
+                title: 媒体标题 #用于反搜id使用
                 item_type: 媒体类型
                 item: 媒体项目数据
             Returns:
@@ -418,10 +419,19 @@ class EmbyDataProcessor(AbstractDataProcessor):
                     logger.opt(colors=True).info(
                         f"<g>TMDB</g>:第三方 ID ——> TMDB ID 转换 <g>SUCCESS</g> TMDB ID: <c>{result}</c>")
                     return result, imdb_id, tvdb_id
-
             logger.opt(colors=True).warning(
-                "<y>TMDB</y>:第三方 ID ——> TMDB ID 转换 <r>FAIL</r>，已置空TMDB ID")
-            return None, imdb_id, tvdb_id
+                "<y>TMDB</y>:第三方 ID ——> TMDB ID 转换 <r>FAIL</r>，尝试通过标题反查 TMDB ID")
+            if not title:
+                logger.opt(colors=True).warning(
+                    "<y>TMDB</y>:标题为空，无法通过标题反查 TMDB ID —— 已置空 TMDB ID")
+                return None, imdb_id, tvdb_id
+            try:
+                tmdb_id = await self._search_id_from_tmdb_by_title(title)
+                return tmdb_id, imdb_id, tvdb_id
+            except Exception as e:
+                logger.opt(colors=True).warning(
+                    f"<y>TMDB</y>:{e}")
+                return None, imdb_id, tvdb_id
 
         def extract_series_id(self, item_type, item) -> Any | None:
             """
@@ -724,7 +734,7 @@ class EmbyDataProcessor(AbstractDataProcessor):
                     external_id, source)
                 if not response:
                     logger.opt(colors=True).warning(
-                        f"<y>TMDB</y>:外部ID {external_id} 转换为TMDB ID 失败，响应返回空值 请检查！")
+                        f"<y>TMDB</y>:外部ID {external_id} 转换为TMDB ID <r>FAIL</r> —— 响应返回空值 请检查！")
                     return None
                 for type, items in response.items():
                     if not items:
@@ -742,6 +752,41 @@ class EmbyDataProcessor(AbstractDataProcessor):
                 logger.opt(colors=True).warning(
                     f"<y>TMDB</y>:外部ID {external_id} ——> TMDB ID 转换时发生未知异常 —— {e}")
                 return None
+
+        async def _search_id_from_tmdb_by_title(self, title):
+            """
+            从TMDB搜索ID
+            使用TMDB API根据标题搜索媒体ID。
+            Args:
+                title: 媒体标题
+            Returns:
+                str | None: 搜索到的TMDB ID，搜索失败返回None
+            """
+            try:
+                response = await TmdbApiRequest.search_by_multi(title)
+                if not response:
+                    logger.opt(colors=True).warning(
+                        f"<y>TMDB</y>:标题 {title} 搜索TMDB ID <r>FAIL</r>—— 响应返回空值 请检查！")
+                    return None
+                total_results = response.get("total_results", 0)
+                if total_results == 0:
+                    logger.opt(colors=True).warning(
+                        f"<y>TMDB</y>:标题 {title} 在 TMDB 中未找到匹配记录")
+                    return None
+                tmdb_id = response["results"][0].get("id")
+                title = response["results"][0].get(
+                    "title") or response["results"][0].get("name")
+                if total_results == 1:
+                    logger.opt(colors=True).info(
+                        f"<y>TMDB</y>:标题 {title} 在 TMDB 中找到唯一匹配记录 TMDB ID: {tmdb_id}")
+                elif total_results > 1:
+                    logger.opt(colors=True).info(
+                        f"<y>TMDB</y>:标题 {title} 在 TMDB 中找到多个匹配记录，选择首个返回项 {title} 的 TMDB ID: {tmdb_id}")
+                return tmdb_id
+            except AppError.Exception as e:
+                raise e
+            except Exception as e:
+                AppError.UnknownError.raise_(f"通过标题搜索 TMDB ID 失败 —— {e}")
 
     def _enable_anime_process(self):
         """

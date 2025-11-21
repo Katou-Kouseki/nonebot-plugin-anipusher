@@ -28,7 +28,7 @@ class ImageSelector:
     确保在各种情况下都能提供可用的图片资源。
     """
 
-    def __init__(self, image_queue: list , tmdb_id: str | None) -> None:
+    def __init__(self, image_queue: list, tmdb_id: str | None) -> None:
         """
         初始化图片选择器
         Args:
@@ -46,13 +46,15 @@ class ImageSelector:
         Returns:
             Path | None: 图片文件路径，当所有降级策略都失败时返回None
         """
-        if not self.tmdb_id:
-            logger.opt(colors=True).warning('<y>PUSHER</y>:无法验证图片缓存 TMDB ID 缺失 ')
+        if not self.tmdb_id or self.tmdb_id == 'None':
+            logger.opt(colors=True).warning(
+                '<y>PUSHER</y>:无法验证图片缓存 —— TMDB ID 缺失')
             return self._fallback_to_available_image()
         # 先尝试从本地缓存中查找图片
         if self._search_in_localstore() and self.output_img is not None:
             # 如果本地缓存中找到图片，且图片有效，则直接返回
-            logger.opt(colors=True).info(f'<g>PUSHER</g>:本地缓存图片 TMDB ID <c>{self.tmdb_id}</c> 已就绪')
+            logger.opt(colors=True).info(
+                f'<g>PUSHER</g>:本地缓存图片 TMDB ID <c>{self.tmdb_id}</c> 已就绪')
             return self.output_img
         download_byte = await self._refresh_image_cache()
         if download_byte is None:
@@ -65,10 +67,12 @@ class ImageSelector:
             with open(local_img, 'wb') as f:
                 f.write(download_byte)
             self.output_img = local_img
-            logger.opt(colors=True).info(f'<g>PUSHER</g>:TMDB ID <c>{self.tmdb_id}</c> 图片缓存更新成功')
+            logger.opt(colors=True).info(
+                f'<g>PUSHER</g>:TMDB ID <c>{self.tmdb_id}</c> 图片缓存更新成功')
             return self.output_img
         except Exception as e:
-            logger.opt(colors=True).error(f'<y>PUSHER</y>:保存图片到本地缓存 <c>{local_img}</c> 失败 —— {e}')
+            logger.opt(colors=True).error(
+                f'<y>PUSHER</y>:保存图片到本地缓存 <c>{local_img}</c> 失败 —— {e}')
             return self._fallback_to_available_image()
 
     def _search_in_localstore(self) -> bool:
@@ -86,7 +90,8 @@ class ImageSelector:
                 return True
             return False
         except Exception as e:
-            logger.opt(colors=True).error(f'<y>PUSHER</y>:本地缓存图片搜索 <r>异常</r> —— {e}')
+            logger.opt(colors=True).error(
+                f'<y>PUSHER</y>:本地缓存图片搜索 <r>异常</r> —— {e}')
             return False
 
     def _fallback_to_available_image(self) -> Path | None:
@@ -99,7 +104,8 @@ class ImageSelector:
             Path | None: 可用图片路径，若所有降级策略失败则返回None
         """
         if self.output_img:
-            logger.opt(colors=True).warning('<y>PUSHER</y>:更新图片 <r>失败</r>，回退使用超期图片')
+            logger.opt(colors=True).warning(
+                '<y>PUSHER</y>:更新图片 <r>失败</r>，回退使用超期图片')
             return self.output_img
         logger.opt(colors=True).warning('<y>PUSHER</y>:无可用图片，回退至默认图片')
         try:
@@ -110,7 +116,8 @@ class ImageSelector:
                 raise AppError.ResourceNotFound.raise_('默认图片资源缺失')
             return default_img
         except Exception as e:
-            logger.opt(colors=True).error(f'<y>PUSHER</y>:获取默认图片 <r>失败</r> —— {e}')
+            logger.opt(colors=True).error(
+                f'<y>PUSHER</y>:获取默认图片 <r>失败</r> —— {e}')
             return None
 
     async def _refresh_image_cache(self) -> bytes | None:
@@ -125,7 +132,8 @@ class ImageSelector:
             # 确保缓存目录存在
             WORKDIR.cache_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            logger.opt(colors=True).error(f'<y>PUSHER</y>:刷新图片缓存初始化 <r>失败</r> —— {e}')
+            logger.opt(colors=True).error(
+                f'<y>PUSHER</y>:刷新图片缓存初始化 <r>失败</r> —— {e}')
             return None
         # 创建并发任务列表
         tasks = []
@@ -135,10 +143,12 @@ class ImageSelector:
                 if task:
                     tasks.append(task)
             except Exception as e:
-                logger.opt(colors=True).error(f'<y>PUSHER</y>:创建图片下载任务 <c>{img_url}</c> 失败 —— {e}')
+                logger.opt(colors=True).error(
+                    f'<y>PUSHER</y>:创建图片下载任务 <c>{img_url}</c> 失败 —— {e}')
                 continue
         if not tasks:
-            logger.opt(colors=True).warning(f'<y>PUSHER</y>:TMDB ID <c>{self.tmdb_id}</c> 无有效图片 URL')
+            logger.opt(colors=True).warning(
+                f'<y>PUSHER</y>:TMDB ID <c>{self.tmdb_id}</c> 无有效图片 URL')
             return None
         # 等待第一个完成的任务
         return await self._wait_first_completed_task(tasks)
@@ -202,8 +212,10 @@ class ImageSelector:
                             await asyncio.wait(pending, timeout=1.0)  # 等待取消完成
                         return result
                     except Exception as e:
-                        logger.opt(colors=True).error(f'<y>PUSHER</y>:图片下载 <r>失败</r>  —— {e}')
-        logger.opt(colors=True).error(f'<y>PUSHER</y>:TMDB ID <c>{self.tmdb_id}</c> 所有图片下载任务 <r>失败</r>')
+                        logger.opt(colors=True).error(
+                            f'<y>PUSHER</y>:图片下载 <r>失败</r>  —— {e}')
+        logger.opt(colors=True).error(
+            f'<y>PUSHER</y>:TMDB ID <c>{self.tmdb_id}</c> 所有图片下载任务 <r>失败</r>')
         return None
 
     @staticmethod
@@ -224,5 +236,6 @@ class ImageSelector:
             time_diff = datetime.now() - modified_time
             return time_diff < timedelta(hours=expire_hours)
         except Exception as e:
-            logger.opt(colors=True).error(f'<y>PUSHER</y>:检查本地缓存图片有效期 <r>失败</r> —— {e}')
+            logger.opt(colors=True).error(
+                f'<y>PUSHER</y>:检查本地缓存图片有效期 <r>失败</r> —— {e}')
             return False

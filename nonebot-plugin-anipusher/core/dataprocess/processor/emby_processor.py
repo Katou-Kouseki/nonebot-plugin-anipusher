@@ -420,7 +420,7 @@ class EmbyDataProcessor(AbstractDataProcessor):
                         f"<g>TMDB</g>:第三方 ID ——> TMDB ID 转换 <g>SUCCESS</g> TMDB ID: <c>{result}</c>")
                     return result, imdb_id, tvdb_id
             logger.opt(colors=True).warning(
-                "<y>TMDB</y>:第三方 ID ——> TMDB ID 转换 <r>FAIL</r>，尝试通过标题反查 TMDB ID")
+                "<y>TMDB</y>:第三方 ID ——> TMDB ID 转换 <r>FAIL</r> —— 尝试通过标题反查 TMDB ID")
             if not title:
                 logger.opt(colors=True).warning(
                     "<y>TMDB</y>:标题为空，无法通过标题反查 TMDB ID —— 已置空 TMDB ID")
@@ -778,10 +778,10 @@ class EmbyDataProcessor(AbstractDataProcessor):
                     "title") or response["results"][0].get("name")
                 if total_results == 1:
                     logger.opt(colors=True).info(
-                        f"<y>TMDB</y>:标题 {title} 在 TMDB 中找到唯一匹配记录 TMDB ID: {tmdb_id}")
+                        f"<g>TMDB</g>:标题 <c>{title}</c> 在 TMDB 中找到唯一匹配记录 TMDB ID: <c>{tmdb_id}</c>")
                 elif total_results > 1:
                     logger.opt(colors=True).info(
-                        f"<y>TMDB</y>:标题 {title} 在 TMDB 中找到多个匹配记录，选择首个返回项 {title} 的 TMDB ID: {tmdb_id}")
+                        f"<g>TMDB</g>:标题 <c>{title}</c> 在 TMDB 中找到多个匹配记录，选择首个返回项 <c>{title}</c> 对应 TMDB ID: <c>{tmdb_id}</c>")
                 return tmdb_id
             except AppError.Exception as e:
                 raise e

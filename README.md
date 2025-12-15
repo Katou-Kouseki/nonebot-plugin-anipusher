@@ -141,7 +141,7 @@ Event目前只支持`媒体库-新媒体已添加`<br>
 |:----|:----:|:----:|:----:|
 | anipusher__emby_host | 否 | 无 | Emby的服务器地址（请勿填写中转地址）|
 | anipusher__emby_key | 否 | 无 | Emby服务器-高级-API密钥中生成的密钥 |
-| anipusher__tmdb_authorization | 否 | 无 | TMDB用户的ApiKey|
+| anipusher__tmdb_authorization | 否 | 无 | TMDB用户的API token|
 | anipusher__proxy | 否 | 无 | TMDB代理，如不填写则不使用代理 |
 
 ## 🎉 使用

@@ -145,11 +145,13 @@ class AppError(Enum):
         except Exception as e:
             print(f"日志记录失败: {e}")
 
-    class Exception(Exception):
-        def __init__(self, error_code: 'AppError', extra_msg: str = ""):
-            self.error_code = error_code
-            self.extra_msg = extra_msg
-            super().__init__(f"{error_code.msg} {extra_msg}".strip())
+class _AppException(Exception):
+    def __init__(self, error_code: 'AppError', extra_msg: str = ""):
+        self.error_code = error_code
+        self.extra_msg = extra_msg
+        super().__init__(f"{error_code.msg} {extra_msg}".strip())
 
-        def __str__(self):
-            return f"[{self.error_code.code}] {super().__str__()}"
+    def __str__(self):
+        return f"[{self.error_code.code}] {super().__str__()}"
+
+AppError.Exception = _AppException

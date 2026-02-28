@@ -7,13 +7,11 @@
 - 处理订阅者数据（群组订阅者和私人订阅者）
 - 提取媒体信息（标题、集数、评分、类型等）
 - 生成图片队列用于消息推送
+- 支持合并推送所需的媒体类型和季数字段
 """
-# 标准库
 import json
 from datetime import datetime
-# 第三方库
 from nonebot import logger
-# 项目内部模块
 from ...mapping import TableName
 
 
@@ -22,6 +20,7 @@ class DataPicker:
     数据选择器类 - 从多个数据源提取并整合信息
     支持从不同类型的数据源（如ANIRSS、EMBY）中提取信息，并进行标准化处理，
     为消息推送提供统一格式的数据。
+    支持合并推送所需的额外字段提取。
     """
 
     def __init__(self,
@@ -59,7 +58,14 @@ class DataPicker:
             "tmdb_id": self._pick_tmdb_id(),
             "group_subscribers": group_subscriber,
             "private_subscribers": private_subscriber,
-            "image_queue": self._pick_image_queue()
+            "image_queue": self._pick_image_queue(),
+            "media_type": self._pick_media_type(),
+            "season": self._pick_season(),
+            "subgroup": self._pick_subgroup(),
+            "progress": self._pick_progress(),
+            "premiere": self._pick_premiere(),
+            "bgm_url": self._pick_bgmurl(),
+            "tmdb_url": self._pick_tmdb_url(),
         }
 
     def _pick_id(self) -> int | None:
@@ -128,9 +134,14 @@ class DataPicker:
             else:
                 logger.opt(colors=True).info(f"<y>PICKER</y>:未知的类型 —— {type}")
                 return None
-        # 该断言仅为避免IDE静态类型检查失败
-        assert season is not None and episode is not None
-        return f"S{int(season):02d}E{int(episode):02d}"
+        else:
+            return None
+        if season is not None and episode is not None:
+            try:
+                return f"第 {int(season)} 季 | 第 {int(episode)} 集"
+            except (ValueError, TypeError):
+                return None
+        return None
 
     def _pick_episode_title(self) -> str | None:
         """
@@ -200,7 +211,6 @@ class DataPicker:
         if self.source in (TableName.ANIRSS, TableName.EMBY):
             if score := self.source_data.get("score", None):
                 return score
-        # 如果没有score则尝试降级从Anime数据库获取score
         if score := self.anime_data.get("score", None):
             return score
         logger.opt(colors=True).info("<y>PICKER</y>:未提取到数据 <c>Score</c>")
@@ -218,7 +228,6 @@ class DataPicker:
                 return genres
         elif self.source == TableName.ANIRSS:
             pass
-        # 如果没有genres则尝试降级从Anime数据库获取genres
         if genres := self.anime_data.get("genres", None):
             return genres
         logger.opt(colors=True).info("<y>PICKER</y>:未提取到数据 <c>Genres</c>")
@@ -234,10 +243,118 @@ class DataPicker:
         if self.source in (TableName.ANIRSS, TableName.EMBY):
             if tmdb_id := self.source_data.get("tmdb_id", None):
                 return tmdb_id
-        # 如果没有tmdb_id则尝试降级从Anime数据库获取tmdb_id
         if tmdb_id := self.anime_data.get("tmdb_id", None):
             return tmdb_id
         logger.opt(colors=True).info("<y>PICKER</y>:未提取到数据 <c>TMDB ID</c>")
+        return None
+
+    def _pick_media_type(self) -> str | None:
+        """
+        提取媒体类型
+        用于判断是否使用合并推送功能
+        Returns:
+            str | None: 媒体类型（Movie, Episode, Series），如果无法提取则返回None
+        """
+        if self.source == TableName.EMBY:
+            return self.source_data.get("type")
+        elif self.source == TableName.ANIRSS:
+            season = self.source_data.get("season")
+            episode = self.source_data.get("episode")
+            if season and episode:
+                return "Episode"
+            elif season:
+                return "Series"
+        return None
+
+    def _pick_season(self) -> str | None:
+        """
+        提取季数
+        用于合并推送时显示季数信息
+        Returns:
+            str | None: 季数，如果无法提取则返回None
+        """
+        if self.source == TableName.EMBY:
+            type = self.source_data.get('type')
+            if type == "Movie":
+                return None
+            season = self.source_data.get("season")
+            if season is not None:
+                try:
+                    return str(int(season))
+                except (ValueError, TypeError):
+                    return str(season) if season else None
+        elif self.source == TableName.ANIRSS:
+            season = self.source_data.get("season")
+            if season is not None:
+                try:
+                    return str(int(season))
+                except (ValueError, TypeError):
+                    return str(season) if season else None
+        return None
+
+    def _pick_subgroup(self) -> str | None:
+        if self.source == TableName.ANIRSS:
+            return self.source_data.get('subgroup')
+        logger.opt(colors=True).debug("<y>PICKER</y>:没有获取到数据subgroup")
+        return None
+
+    def _pick_progress(self) -> str | None:
+        if self.source == TableName.ANIRSS:
+            return self.source_data.get('progress')
+        logger.opt(colors=True).debug("<y>PICKER</y>:没有获取到数据progress")
+        return None
+
+    def _pick_premiere(self) -> str | None:
+        for key in ['premiere', 'PremiereDate']:
+             premiere = self.source_data.get(key)
+             if premiere and isinstance(premiere, str):
+                 if 'T' in premiere: return premiere.split('T')[0]
+                 return premiere
+
+        if self.anime_data:
+            if premiere := self.anime_data.get("premiere"): return str(premiere)
+
+        logger.opt(colors=True).debug("<y>PICKER</y>:没有获取到数据premiere")
+        return None
+
+    def _pick_bgmurl(self) -> str | None:
+        if bgm_url := self.source_data.get("bangumi_url"): return bgm_url
+        if bgm_url := self.source_data.get("bgmUrl"): return bgm_url
+        if self.source == TableName.EMBY:
+            external_urls = self.source_data.get('external_urls', [])
+            if isinstance(external_urls, list):
+                for url_obj in external_urls:
+                    if isinstance(url_obj, dict) and (url_obj.get('Name') or url_obj.get('name', '')).lower() == 'bangumi':
+                        if url := url_obj.get('Url') or url_obj.get('url'): return url
+            provider_ids = self.source_data.get('provider_ids')
+            if isinstance(provider_ids, dict):
+                 if bangumi_id := provider_ids.get('Bangumi'): return f"https://bgm.tv/subject/{bangumi_id}"
+
+        if self.anime_data:
+            if bgm_url := self.anime_data.get("bangumi_url"): return bgm_url
+
+        logger.opt(colors=True).debug("<y>PICKER</y>:没有获取到数据bgmUrl")
+        return None
+
+    def _pick_tmdb_url(self) -> str | None:
+        tmdb_url = self.source_data.get('tmdb_url') or self.source_data.get('tmdbUrl')
+        if tmdb_url and isinstance(tmdb_url, str) and tmdb_url.strip():
+            return tmdb_url.strip()
+        if self.source == TableName.EMBY:
+            external_urls = self.source_data.get('external_urls', [])
+            if isinstance(external_urls, list):
+                for url_obj in external_urls:
+                    if isinstance(url_obj, dict) and (url_obj.get('Name') or url_obj.get('name', '')).lower() == 'themoviedb':
+                        if url := url_obj.get('Url') or url_obj.get('url'): return url
+
+        tmdb_id = self._pick_tmdb_id()
+        if tmdb_id:
+            media_type = self._pick_media_type()
+            base = "https://www.themoviedb.org"
+            type_path = "tv" if media_type and media_type.lower() != 'movie' else "movie"
+            return f"{base}/{type_path}/{tmdb_id}"
+
+        logger.opt(colors=True).debug("<y>PICKER</y>:没有获取到数据tmdbUrl")
         return None
 
     def _pick_subscriber(self) -> tuple[dict[str, list[str]], list[str]]:
@@ -257,8 +374,6 @@ class DataPicker:
                 raw_data = self.anime_data.get(field_name, default_value)
                 if raw_data is None:
                     return default_value
-                # 如果是字符串，尝试JSON解析
-                    # 如果已经是期望的类型，直接返回
                 if isinstance(raw_data, expected_type):
                     return raw_data
                 if isinstance(raw_data, str):
@@ -273,7 +388,6 @@ class DataPicker:
                         return default_value
                 logger.opt(colors=True).error(f"<r>PICKER</r>:字段 {field_name} 类型 <r>错误</r> 应为 {expected_type.__name__} 实际为 {type(raw_data).__name__} 回退至默认值")
                 return default_value
-            # 获取订阅者数据
             group_subscriber = _parse_config_field('group_subscriber', dict, {})
             private_subscriber = _parse_config_field('private_subscriber', list, [])
             return group_subscriber, private_subscriber

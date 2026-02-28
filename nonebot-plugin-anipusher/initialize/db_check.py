@@ -90,7 +90,11 @@ class DBHealthCheck:
         # 获取表名对应的模型类
         model_class = table_name.get_model_class()
         # 从模型类的JSON schema中提取属性名集合
-        model_keys = set(model_class.model_json_schema()['properties'].keys())
+        if hasattr(model_class, "model_json_schema"):
+            model_keys = set(model_class.model_json_schema()['properties'].keys())
+        else:
+            # 兼容 Pydantic V1
+            model_keys = set(model_class.schema()['properties'].keys())
         # 比较数据库字段集合和模型字段集合是否完全一致
         if db_keys != model_keys:
             return False

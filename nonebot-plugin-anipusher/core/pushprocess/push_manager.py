@@ -9,6 +9,8 @@
 5. 确定推送目标（私聊和群组）
 6. 渲染和发送消息
 7. 更新发送状态
+8. 支持延迟合并推送功能
+
 核心类: PushManager - 管理整个推送生命周期
 
 调用方式示例：
@@ -19,19 +21,17 @@
     manager = PushManager(TableName.BANGUMI)
     await manager.execute()
 """
-# 第三方库导入
 from nonebot import logger
-# 项目内部模块导入 - 顶级模块（...）
 from ...mapping import TableName
 from ...exceptions import AppError
 from ...database import DatabaseOperator, schema_manager
 from ...utils import convert_db_list_first_row_to_dict
 from ...config import PUSHTARGET
-# 项目内部模块导入 - 同级模块（.）
 from .data_picker import DataPicker
 from .image_selector import ImageSelector
 from .message_factory import MessageRenderer
 from .push_machine import private_msg_pusher, group_msg_pusher
+from .push_buffer import get_push_buffer
 
 
 class PushManager:
@@ -39,6 +39,7 @@ class PushManager:
     推送管理器类
     负责协调整个消息推送流程，从数据获取到最终推送和状态更新。
     支持私聊和群组两种推送方式，并实现了消息的分段渲染优化。
+    支持延迟合并推送功能，将同一作品的多个剧集合并为一条消息推送。
     Attributes:
         source: 数据来源表名枚举
         tmdb_id: 媒体的TMDB ID，用于获取额外信息
@@ -54,6 +55,9 @@ class PushManager:
         self.source: TableName = source
         self.tmdb_id: int | None = None
         self.unsend_data_id = None
+        self.media_type: str | None = None
+        self.group_push_target: dict = {}
+        self.private_push_target: list = []
 
     @classmethod
     async def create_and_execute(cls, source: TableName):
@@ -78,9 +82,9 @@ class PushManager:
         4. 根据TMDB ID查询对应的ANIME信息（若无则使用默认空数据）
         5. 使用DataPicker生成完整的消息参数
         6. 通过ImageSelector为消息选择推送图片
-        7. 合并私聊与群组推送目标
-        8. 分别渲染并推送私聊消息与群组消息
-        9. 将本条数据标记为已发送
+        7. 在推送前先标记为已发送，防止重复推送
+        8. 合并私聊与群组推送目标
+        9. 根据媒体类型决定是否使用缓冲合并推送
         """
         try:
             if not self.source or not isinstance(self.source, TableName):
@@ -151,7 +155,12 @@ class PushManager:
         try:
             image_queue = message_params.get("image_queue", [])
             try:
-                image_selector = ImageSelector(image_queue, str(self.tmdb_id))
+                image_selector = ImageSelector(
+                    image_queue, 
+                    str(self.tmdb_id),
+                    source_data=unsend_data,
+                    emby_series_id=unsend_data.get("series_id")
+                )
                 image_path = await image_selector.select()
             except Exception as e:
                 AppError.ImageSelectorCreateError.raise_(f"{str(e)}")
@@ -161,10 +170,9 @@ class PushManager:
             logger.opt(colors=True).error(
                 "<r>PUSHER</r>:获取图片地址 <r>失败</r> —— 跳过图片发送")
             image_path = None
-        # todo：未来改造为可变的消息参数
         message_params["image"] = image_path
         try:
-            private_push_target, group_push_target = self._pushtarget_conflate(
+            self.private_push_target, self.group_push_target = self._pushtarget_conflate(
                 message_params)
         except Exception as e:
             logger.opt(exception=True).error(
@@ -172,8 +180,6 @@ class PushManager:
             logger.opt(colors=True).error(
                 "<r>PUSHER</r>:推送目标检索 <r>失败</r> —— 推送流程 <r>中断</r>")
             return
-        await self._render_and_push_to_private(private_push_target, message_params)
-        await self._render_and_push_to_group(group_push_target, message_params)
         try:
             await self._change_send_status()
             logger.opt(colors=True).info(
@@ -183,6 +189,89 @@ class PushManager:
                 f"<r>PUSHER:</r>{e}")
             logger.opt(colors=True).error(
                 "<r>PUSHER</r>:更新数据发送状态 <r>失败</r> —— 推送流程 <r>中断</r>")
+            return
+        self.media_type = message_params.get("media_type")
+        title = message_params.get("title")
+        if not title:
+            logger.opt(colors=True).warning(
+                "<y>PUSHER</y>: 标题为空，无法推送")
+            return
+        if self.media_type and self.media_type.lower() == 'movie':
+            await self._do_push(message_params, is_merged=False)
+        elif self.media_type and self.media_type.lower() in ('episode', 'series'):
+            push_buffer = get_push_buffer()
+            await push_buffer.add_episode(
+                title=title,
+                episode_data=message_params,
+                push_callback=self._do_push
+            )
+            logger.opt(colors=True).info(
+                f"<g>PUSHER</g>: [{title}] 已加入推送缓冲区")
+        else:
+            logger.opt(colors=True).warning(
+                f"<y>PUSHER</y>: [{title}] 未知媒体类型 {self.media_type}，直接推送")
+            await self._do_push(message_params, is_merged=False)
+
+    async def _do_push(self, message_params: dict, is_merged: bool = False):
+        """
+        实际执行推送
+        Args:
+            message_params: 消息参数字典
+            is_merged: 是否为合并推送
+        """
+        try:
+            message_renderer = MessageRenderer()
+            if is_merged:
+                message = message_renderer.render_merged(message_params)
+            else:
+                message = message_renderer.render_all(message_params)
+            logger.opt(colors=True).info(
+                "<g>PUSHER</g>:消息渲染  |<g>COMPLETE</g>")
+        except Exception as e:
+            logger.opt(exception=True).error(
+                f"<r>RENDER</r>:{e}")
+            logger.opt(colors=True).error(
+                "<r>RENDER</r>:消息渲染 <r>失败</r> —— 推送流程 <r>中断</r>")
+            return
+        await self._push_to_private(message)
+        await self._push_to_group(message, message_params)
+        push_type = "合并推送" if is_merged else "单集推送"
+        logger.opt(colors=True).info(
+            f"<g>PUSHER</g>: {push_type} [{message_params.get('title')}] 完成")
+
+    async def _push_to_private(self, message):
+        """推送消息到私聊用户"""
+        if not self.private_push_target:
+            logger.opt(colors=True).info(
+                "<g>PUSHER</g>:没有私聊推送目标 —— 消息渲染与发送已跳过 |<g>PASS</g>")
+            return
+        await private_msg_pusher(message, self.private_push_target)
+        logger.opt(colors=True).info(
+            "<g>PUSHER</g>:私聊推送        |<g>COMPLETE</g>")
+
+    async def _push_to_group(self, message, message_params: dict):
+        """推送消息到群组"""
+        if not self.group_push_target:
+            logger.opt(colors=True).info(
+                "<g>PUSHER</g>:没有群组推送目标 —— 消息渲染与发送已跳过 |<g>PASS</g>")
+            return
+        try:
+            message_renderer = MessageRenderer()
+            base_message = message_renderer.render_base(message_params)
+            logger.opt(colors=True).info(
+                "<g>PUSHER</g>:基础消息渲染  |<g>COMPLETE</g>")
+            for group_id, subscriber in self.group_push_target.items():
+                message_params["at"] = subscriber
+                at_message = message_renderer.render_at(message_params)
+                full_message = base_message + at_message
+                await group_msg_pusher(full_message, [group_id])
+            logger.opt(colors=True).info(
+                "<g>PUSHER</g>:群组推送        |<g>COMPLETE</g>")
+        except Exception as e:
+            logger.opt(exception=True).error(
+                f"<r>RENDER</r>:{e}")
+            logger.opt(colors=True).error(
+                "<r>RENDER</r>:消息渲染 <r>失败</r> —— 推送流程 <r>中断</r>")
             return
 
     async def _select_unsend_data_from_db(self) -> list:
@@ -273,19 +362,17 @@ class PushManager:
         """
         try:
             private_subscribers = picked_params.get(
-                "private_subscribers", []) or []  # 私聊订阅者
+                "private_subscribers", []) or []
             group_subscribers = picked_params.get(
-                "group_subscribers", {}) or {}  # 群组订阅者
+                "group_subscribers", {}) or {}
             private_pusher_user = PUSHTARGET.PrivatePushTarget.get(
-                self.source.value, []) or []  # 私聊推送用户
+                self.source.value, []) or []
             group_pusher_user = PUSHTARGET.GroupPushTarget.get(
-                self.source.value, []) or []  # 群组推送用户
-            # 计算私聊推送目标：筛选在配置中的用户
+                self.source.value, []) or []
             private_pusher_user_set = set(map(str, private_pusher_user))
             private_subscribers_str = set(map(str, private_subscribers))
             private_push_target = list(
                 private_subscribers_str & private_pusher_user_set)
-            # 计算群组推送目标：筛选在配置中的群组
             group_pusher_user_set = set(map(str, group_pusher_user))
             group_push_target = {}
             for group_id in group_pusher_user_set:
@@ -296,63 +383,6 @@ class PushManager:
             raise
         except Exception as e:
             AppError.PushTargetMergeError.raise_(f"{str(e)}")
-
-    async def _render_and_push_to_private(self, private_push_target: list, message_params: dict):
-        """
-        渲染并推送消息到私聊用户
-        Args:
-            private_push_target: 私聊推送目标用户列表
-            message_params: 消息参数字典
-        """
-        if not private_push_target:
-            logger.opt(colors=True).info(
-                "<g>PUSHER</g>:没有私聊推送目标 —— 消息渲染与发送已跳过 |<g>PASS</g>")
-            return
-        try:
-            message_params["at"] = None
-            message_renderer = MessageRenderer()
-            message = message_renderer.render_all(message_params)
-            logger.opt(colors=True).info(
-                "<g>PUSHER</g>:消息渲染  |<g>COMPLETE</g>")
-        except Exception as e:
-            logger.opt(exception=True).error(
-                f"<r>RENDER</r>:{e}")
-            logger.opt(colors=True).error(
-                "<r>RENDER</r>:消息渲染 <r>失败</r> —— 推送流程 <r>中断</r>")
-            return
-        await private_msg_pusher(message, private_push_target)
-        logger.opt(colors=True).info(
-            "<g>PUSHER</g>:私聊推送        |<g>COMPLETE</g>")
-
-    async def _render_and_push_to_group(self, group_push_target: dict, message_params: dict):
-        """
-        渲染并推送消息到群组
-        Args:
-            group_push_target: 群组推送目标字典，键为群组ID，值为需要@的用户列表
-            message_params: 消息参数字典
-        """
-        if not group_push_target:
-            logger.opt(colors=True).info(
-                "<g>PUSHER</g>:没有群组推送目标 —— 消息渲染与发送已跳过 |<g>PASS</g>")
-            return
-        try:
-            message_renderer = MessageRenderer()
-            base_message = message_renderer.render_base(message_params)
-            logger.opt(colors=True).info(
-                "<g>PUSHER</g>:基础消息渲染  |<g>COMPLETE</g>")
-            for group_id, subscriber in group_push_target.items():
-                message_params["at"] = subscriber  # 设置当前群组的@用户列表
-                at_message = message_renderer.render_at(message_params)
-                message = base_message + at_message
-                await group_msg_pusher(message, [group_id])
-            logger.opt(colors=True).info(
-                "<g>PUSHER</g>:群组推送        |<g>COMPLETE</g>")
-        except Exception as e:
-            logger.opt(exception=True).error(
-                f"<r>RENDER</r>:{e}")
-            logger.opt(colors=True).error(
-                "<r>RENDER</r>:消息渲染 <r>失败</r> —— 推送流程 <r>中断</r>")
-            return
 
     async def _change_send_status(self):
         """

@@ -1,64 +1,154 @@
 # 消息模板配置
 # 支持静态文本、动态数据、条件显示等功能
+# 支持单集推送和合并推送两种模板
 
-version: "1.0"
-description: "推送消息模板配置"
+version: "1.1"
+description: "推送消息模板配置 - 支持单集推送和合并推送"
 
+# 单集推送模板
 template:
-  # 静态文本 - 总是显示
-  - content: "⬇ 发现新的消息通知 ⬇"
-    type: "static"
-    weight: 1  # 显示顺序权重
-
   # 图片 - 必须存在时才显示
   - content: "{image}"
     field: "image"
     type: "image"
-    weight: 2
+    weight: 1
 
   # 标题 - 主要信息
-  - content: "🎞️ {title}"
+  - content: "🎬 {title}"
     field: "title"
+    type: "dynamic"
+    weight: 2
+
+  # 只有电视剧集有季和集
+  - content: "✨ 当前集数 - {episode}"
+    field: "episode"
     type: "dynamic"
     weight: 3
 
-  - content: "📺 集名 - {episode_title}"
+  # 本集标题
+  - content: "📺 本集标题 - {episode_title}"
     field: "episode_title"
     type: "dynamic"
     weight: 4
 
-  - content: "🔢 分集 - {episode}"
-    field: "episode"
+  # 字幕来源
+  - content: "🔤 字幕来源 - {subgroup}"
+    field: "subgroup"
+    type: "dynamic"
+    weight: 5
+
+  # 追番进度
+  - content: "📊 追番进度 - {progress}"
+    field: "progress"
+    type: "dynamic"
+    weight: 6
+
+  # 更新时间
+  - content: "⏱️ 更新时间 - {timestamp}"
+    field: "timestamp"
+    type: "dynamic"
+    weight: 7
+
+  # 首播日期
+  - content: "📝 首播日期 - {premiere}"
+    field: "premiere"
+    type: "dynamic"
+    weight: 8
+
+  # 操作类型
+  - content: "🔔 推送类型 - {action}"
+    field: "action"
+    type: "dynamic"
+    weight: 9
+    
+  # 番组计划优先
+  - content: "🌸 番组计划 - {bgm_url}"
+    field: "bgm_url"
+    type: "dynamic"
+    weight: 10
+
+  # TMDb 作为第二顺位 (由于旧版逻辑)
+  - content: "🎬 TMDB链接 - {tmdb_url}"
+    field: "tmdb_url"
+    type: "dynamic"
+    weight: 11
+
+  # TAG
+  - content: "🔖 TAG - {genres}"
+    field: "genres"
+    type: "dynamic"
+    weight: 12
+
+  # 评分 - 有评分时才显示
+  - content: "🔢 目前评分 - {score}"
+    field: "score"
+    type: "dynamic"
+    weight: 13
+
+  # 提及用户
+  - content: "📣 通知 - {at}"
+    field: "at"
+    type: "at"
+    weight: 14
+
+# 合并推送模板 - 当同一作品多集更新时使用
+merged_template:
+  # 图片
+  - content: "{image}"
+    field: "image"
+    type: "image"
+    weight: 1
+
+  # 标题
+  - content: "🎬 {title}"
+    field: "title"
+    type: "dynamic"
+    weight: 2
+
+  # 合并集数显示 - 特殊类型，自动格式化集数范围
+  - content: "✨ 第 {season} 季 更新 {episode_count} 集 ({episode_range})"
+    type: "merged_episode"
+    weight: 3
+
+  # 本集标题（合并推送时，可能会被动态解析）
+  - content: "📺 本集标题 - {episode_title}"
+    field: "episode_title"
+    type: "dynamic"
+    weight: 4
+
+  # 追番进度
+  - content: "📊 追番进度 - {progress}"
+    field: "progress"
     type: "dynamic"
     weight: 5
 
   # 更新时间
-  - content: "📅 日期 - {timestamp}"
+  - content: "⏱️ 更新时间 - {timestamp}"
     field: "timestamp"
     type: "dynamic"
     weight: 6
 
-  # 评分 - 有评分时才显示
-  - content: "☑️ 评分 - {score}"
-    field: "score"
+  # 首播日期
+  - content: "📝 首播日期 - {premiere}"
+    field: "premiere"
     type: "dynamic"
     weight: 7
 
   # 操作类型
-  - content: "🔧 类型 - {action}"
+  - content: "🔔 推送类型 - {action}"
     field: "action"
     type: "dynamic"
     weight: 8
 
-  # 来源信息
-  - content: "✨ 来源 - {source}"
-    field: "source"
+  # 番组计划
+  - content: "🌸 番组计划 - {bgm_url}"
+    field: "bgm_url"
     type: "dynamic"
     weight: 9
 
-  # TMDB ID
-  - content: "🔗 编号 - {tmdb_id}"
-    field: "tmdb_id"
+  # TMDB链接
+  - content: "🎬 TMDB链接 - {tmdb_url}"
+    field: "tmdb_url"
     type: "dynamic"
     weight: 10
 
@@ -68,8 +158,14 @@ template:
     type: "dynamic"
     weight: 11
 
+  # 评分
+  - content: "🔢 目前评分 - {score}"
+    field: "score"
+    type: "dynamic"
+    weight: 12
+
   # 提及用户
   - content: "📣 通知 - {at}"
     field: "at"
     type: "at"
-    weight: 12
+    weight: 13

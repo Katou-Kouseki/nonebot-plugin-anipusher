@@ -10,15 +10,14 @@
 4. 消息长度限制
 5. 空行处理
 6. 支持静态文本、图片、动态内容和@用户等多种消息类型
+7. 支持合并推送消息渲染
 """
 
-# 第三方库
 import yaml
 from pathlib import Path
 from typing import Optional
 from nonebot import logger
 from nonebot.adapters.onebot.v11 import Message, MessageSegment
-# 项目内部模块
 from ...config import WORKDIR
 from ...exceptions import AppError
 
@@ -28,6 +27,7 @@ class MessageRenderer:
     消息渲染工厂类，用于将YAML模板渲染成可发送的消息
     支持多种消息类型的渲染，包括静态文本、图片、动态内容和@用户等，
     并提供灵活的模板配置和数据替换功能。
+    支持合并推送消息的渲染。
     """
 
     def __init__(self, template_path: Optional[Path] = None):
@@ -85,14 +85,11 @@ class MessageRenderer:
             AppError.MessageRenderError: 当消息渲染失败时
         """
         try:
-            # 获取模板列表
             template_items = self.template_config.get("template", [])
             if not template_items:
                 AppError.MissingConfiguration.raise_("消息模板文件中未定义任何模板项")
-            # 对模板项按权重排序
             sorted_items = sorted(
                 template_items, key=lambda x: x.get("weight", 0))
-            # 渲染消息行
             rendered_message = Message()
             for _, item in enumerate(sorted_items):
                 try:
@@ -111,6 +108,79 @@ class MessageRenderer:
         except Exception as e:
             AppError.MessageRenderError.raise_(f"{e}")
 
+    def render_merged(self, data: dict) -> Message:
+        """
+        渲染合并推送消息模板
+        当同一作品的多个剧集合并推送时使用此方法
+        Args:
+            data: 包含替换变量的字典，必须包含以下合并推送专用字段：
+                - episode_count: 集数
+                - episode_range: 集数范围显示（如 E01-E12）
+                - season: 季数
+        Returns:
+            Message: 渲染后的可发送消息对象
+        Raises:
+            AppError.MissingConfiguration: 当模板文件中未定义合并推送模板时
+            AppError.MessageRenderError: 当消息渲染失败时
+        """
+        try:
+            merged_template = self.template_config.get("merged_template", [])
+            if not merged_template:
+                logger.opt(colors=True).warning(
+                    "<y>RENDER</y>:未定义合并推送模板，使用默认模板")
+                return self._render_merged_default(data)
+            sorted_items = sorted(
+                merged_template, key=lambda x: x.get("weight", 0))
+            rendered_message = Message()
+            for item in sorted_items:
+                try:
+                    line = self._line_render_merged(item, data)
+                    if line is not None:
+                        rendered_message += line
+                except Exception as e:
+                    logger.opt(colors=True).warning(
+                        f"<y>RENDER</y>:渲染合并消息行时出错 —— {e}")
+                    continue
+            if rendered_message and str(rendered_message).endswith("\n"):
+                rendered_message = Message(str(rendered_message).rstrip("\n"))
+            return rendered_message
+        except AppError.Exception:
+            raise
+        except Exception as e:
+            AppError.MessageRenderError.raise_(f"合并消息渲染失败: {e}")
+
+    def _render_merged_default(self, data: dict) -> Message:
+        """
+        渲染默认合并推送消息
+        当YAML模板中未定义合并推送模板时使用
+        Args:
+            data: 包含替换变量的字典
+        Returns:
+            Message: 渲染后的消息对象
+        """
+        message = Message()
+        if data.get("image"):
+            from ...utils import convert_image_path_to_base64
+            base64_image = convert_image_path_to_base64(data["image"])
+            message.append(MessageSegment.image(base64_image))
+        if data.get("title"):
+            message.append(MessageSegment.text(f"🎬 {data['title']}\n"))
+        episode_count = data.get("episode_count", 0)
+        episode_range = data.get("episode_range", "")
+        season = data.get("season", "1")
+        if episode_count and episode_range:
+            message.append(MessageSegment.text(
+                f"✨第 {season} 季 更新 {episode_count} 集 ({episode_range})\n"))
+        if data.get("timestamp"):
+            message.append(MessageSegment.text(f"⏱️ 更新时间：{data['timestamp']}\n"))
+        if data.get("action"):
+            message.append(MessageSegment.text(f"🔔 推送类型：{data['action']}\n"))
+        if data.get("score"):
+            message.append(MessageSegment.text(f"🔢 目前评分：{data['score']}\n"))
+        if str(message).endswith("\n"):
+            message = Message(str(message).rstrip("\n"))
+        return message
+
     def render_base(self, data: dict) -> Message:
         """
         渲染除@用户部分外的基础消息内容
@@ -123,17 +193,13 @@ class MessageRenderer:
             AppError.MessageRenderError: 当基础消息渲染失败时
         """
         try:
-            # 获取模板列表
             template_items = self.template_config.get("template", [])
             if not template_items:
                 AppError.MissingConfiguration.raise_("消息模板文件中未定义任何模板项")
-            # 对模板项按权重排序
             sorted_items = sorted(
                 template_items, key=lambda x: x.get("weight", 0))
-            # 渲染消息行，但跳过at类型的消息行
             rendered_message = Message()
             for item in sorted_items:
-                # 跳过at类型的消息行
                 if item.get("type") == "at":
                     continue
                 try:
@@ -164,17 +230,13 @@ class MessageRenderer:
             AppError.MessageRenderError: 当@消息渲染失败时
         """
         try:
-            # 获取模板列表
             template_items = self.template_config.get("template", [])
             if not template_items:
                 AppError.MissingConfiguration.raise_("消息模板文件中未定义任何模板项")
-            # 对模板项按权重排序
             sorted_items = sorted(
                 template_items, key=lambda x: x.get("weight", 0))
-            # 只渲染at类型的消息行
             rendered_message = Message()
             for item in sorted_items:
-                # 只处理at类型的消息行
                 if item.get("type") == "at":
                     try:
                         line = self._line_render(item, data)
@@ -202,9 +264,9 @@ class MessageRenderer:
         Raises:
             AppError.MissingParameter: 当缺少必要参数或占位符不匹配时
         """
-        content = template.get("content")  # 静态消息内容或动态消息字段
-        field = template.get("field")  # 动态消息字段
-        type = template.get("type")  # 消息类型
+        content = template.get("content")
+        field = template.get("field")
+        type = template.get("type")
         if not content:
             AppError.MissingParameter.raise_("没有可渲染的消息内容")
         if not type:
@@ -239,7 +301,7 @@ class MessageRenderer:
             return MessageSegment.text(rendered_content + "\n")
         elif type == "at":
             at_message = Message()
-            placeholder = f"{{{field}}}"  # 占位符配置
+            placeholder = f"{{{field}}}"
             if placeholder not in content:
                 AppError.MissingParameter.raise_(
                     f"模板中未提供占位符 <c>{placeholder}</c> 请检查模板配置")
@@ -250,3 +312,63 @@ class MessageRenderer:
                 for user in at_list:
                     at_message.append(MessageSegment.at(user))
             return at_message
+
+    def _line_render_merged(self, template: dict, data: dict | None) -> MessageSegment | Message | None:
+        """
+        渲染合并推送的单条消息行
+        支持合并推送专用字段：episode_count, episode_range, season
+        Args:
+            template: 消息行配置项
+            data: 包含替换变量的字典
+        Returns:
+            MessageSegment | Message | None: 渲染后的消息段或消息对象
+        """
+        content = template.get("content")
+        field = template.get("field")
+        type = template.get("type")
+        if not content:
+            return None
+        if not type:
+            return None
+        if type == "static":
+            return MessageSegment.text(content + "\n")
+        elif type == "image":
+            img_path = (data or {}).get(field)
+            if not img_path:
+                return None
+            from ...utils import convert_image_path_to_base64
+            base64_image = convert_image_path_to_base64(img_path)
+            return MessageSegment.image(base64_image)
+        elif type == "dynamic":
+            if not field:
+                return None
+            filler = (data or {}).get(field)
+            if not filler:
+                logger.opt(colors=True).debug(
+                    f"<y>RENDER</y>:合并推送没有找到字段 <c>{field}</c> —— 跳过")
+                return None
+            rendered_content = content.replace(f"{{{field}}}", str(filler))
+            return MessageSegment.text(rendered_content + "\n")
+        elif type == "merged_episode":
+            episode_count = (data or {}).get("episode_count", 0)
+            episode_range = (data or {}).get("episode_range", "")
+            season = (data or {}).get("season", "1")
+            if episode_count and episode_range:
+                formatted_text = content.replace(
+                    "{season}", str(season)
+                ).replace(
+                    "{episode_count}", str(episode_count)
+                ).replace(
+                    "{episode_range}", episode_range
+                )
+                return MessageSegment.text(formatted_text + "\n")
+            return None
+        elif type == "at":
+            at_message = Message()
+            at_list = (data or {}).get(field) or []
+            if at_list:
+                at_message.append(MessageSegment.text("\n📣 通知："))
+                for user in at_list:
+                    at_message.append(MessageSegment.at(user))
+            return at_message
+        return None

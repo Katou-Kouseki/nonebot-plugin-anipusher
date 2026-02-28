@@ -40,9 +40,9 @@ class ProcessorImport:
             if file.name == "__init__.py" or file.name.startswith("_"):
                 continue
             try:
-                # 使用固定的包名前缀，确保正确导入处理器模块
-                # 由于处理器模块使用相对导入，我们需要使用固定的完整包路径
-                module_name = f"nonebot-plugin-anipusher.core.dataprocess.processor.{file.stem}"
+                # 动态获取当前插件的顶层包名，以兼容任何文件夹名称或运行环境
+                package_root = __name__.split('.')[0]
+                module_name = f"{package_root}.core.dataprocess.processor.{file.stem}"
                 # 动态导入模块，这会触发装饰器的执行
                 importlib.import_module(module_name)
                 successed_module.append(module_name)

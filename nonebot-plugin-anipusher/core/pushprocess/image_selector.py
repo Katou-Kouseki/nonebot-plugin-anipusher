@@ -7,16 +7,17 @@
 - 刷新图片缓存
 - 图片有效性验证
 - 提供降级策略（过期图片或默认图片）
+- 支持Emby图片标签处理
+- 原子化文件写入操作
 """
-# 标准库
 import asyncio
+import shutil
 import aiohttp
 from datetime import datetime, timedelta
 from pathlib import Path
-# 第三方库
+from typing import Dict, Any
 from nonebot import logger
-# 项目内部模块
-from ...config import WORKDIR, APPCONFIG
+from ...config import WORKDIR, APPCONFIG, FUNCTION
 from ...external import get_request
 from ...exceptions import AppError
 
@@ -26,17 +27,27 @@ class ImageSelector:
     图片选择器类 - 负责从本地缓存或网络获取图片并提供降级策略
     支持多种图片来源，包括本地缓存和网络下载，并提供完整的降级机制，
     确保在各种情况下都能提供可用的图片资源。
+    支持Emby图片标签处理和更健壮的缓存管理。
     """
 
-    def __init__(self, image_queue: list, tmdb_id: str | None) -> None:
+    def __init__(self,
+                 image_queue: list,
+                 tmdb_id: str | None,
+                 source_data: Dict[str, Any] | None = None,
+                 emby_series_id: str | None = None) -> None:
         """
         初始化图片选择器
         Args:
-            image_queue: 图片URL队列，用于从网络获取图片
+            image_queue: 图片URL队列或标签队列
             tmdb_id: 媒体内容的TMDB ID，用于标识和缓存图片
+            source_data: 源数据字典，用于处理Emby图片标签
+            emby_series_id: Emby系列ID
         """
         self.image_queue = image_queue
         self.tmdb_id = tmdb_id
+        self.source_data = source_data
+        self.emby_series_id = emby_series_id
+        self.is_image_expired = False
         self.output_img: Path | None = None
 
     async def select(self) -> Path | None:
@@ -46,196 +57,221 @@ class ImageSelector:
         Returns:
             Path | None: 图片文件路径，当所有降级策略都失败时返回None
         """
-        if not self.tmdb_id or self.tmdb_id == 'None':
-            logger.opt(colors=True).warning(
-                '<y>PUSHER</y>:无法验证图片缓存 —— TMDB ID 缺失')
-            return self._fallback_to_available_image()
-        # 先尝试从本地缓存中查找图片
-        if self._search_in_localstore() and self.output_img is not None:
-            # 如果本地缓存中找到图片，且图片有效，则直接返回
+        self.output_img = self._search_in_localstore()
+        if self.output_img and not self.is_image_expired:
             logger.opt(colors=True).info(
-                f'<g>PUSHER</g>:本地缓存图片 TMDB ID <c>{self.tmdb_id}</c> 已就绪')
+                '<g>PUSHER</g>:发现可用的本地图片')
             return self.output_img
-        download_byte = await self._refresh_image_cache()
-        if download_byte is None:
-            return self._fallback_to_available_image()
-        # 保存图片到本地缓存
-        try:
-            if not WORKDIR.cache_dir:
-                AppError.ResourceNotFound.raise_('项目缓存目录缺失')
-            local_img: Path = WORKDIR.cache_dir / f"{self.tmdb_id}.jpg"
-            with open(local_img, 'wb') as f:
-                f.write(download_byte)
-            self.output_img = local_img
+        if self.output_img and self.is_image_expired:
             logger.opt(colors=True).info(
-                f'<g>PUSHER</g>:TMDB ID <c>{self.tmdb_id}</c> 图片缓存更新成功')
-            return self.output_img
-        except Exception as e:
-            logger.opt(colors=True).error(
-                f'<y>PUSHER</y>:保存图片到本地缓存 <c>{local_img}</c> 失败 —— {e}')
-            return self._fallback_to_available_image()
+                '<y>PUSHER</y>:本地图片已过期，尝试获取新图片')
+        result = await self._process_image_queue()
+        if result:
+            return result
+        return self._fallback_to_available_image()
 
-    def _search_in_localstore(self) -> bool:
-        """
-        在本地缓存中搜索有效的图片
-        Returns:
-            bool: 是否找到有效的本地缓存图片
-        """
-        try:
-            if not WORKDIR.cache_dir:
-                raise AppError.ResourceNotFound.raise_('项目缓存目录缺失')
-            local_img: Path = WORKDIR.cache_dir / f"{self.tmdb_id}.jpg"
-            if local_img.exists() and self._is_image_valid(local_img):
-                self.output_img = local_img
-                return True
-            return False
-        except Exception as e:
-            logger.opt(colors=True).error(
-                f'<y>PUSHER</y>:本地缓存图片搜索 <r>异常</r> —— {e}')
-            return False
-
-    def _fallback_to_available_image(self) -> Path | None:
-        """
-        回退到可用图片（过期图片或默认图片）
-        当无法获取新图片时，依次尝试使用：
-        1. 已存在但可能过期的图片
-        2. 默认图片
-        Returns:
-            Path | None: 可用图片路径，若所有降级策略失败则返回None
-        """
-        if self.output_img:
-            logger.opt(colors=True).warning(
-                '<y>PUSHER</y>:更新图片 <r>失败</r>，回退使用超期图片')
-            return self.output_img
-        logger.opt(colors=True).warning('<y>PUSHER</y>:无可用图片，回退至默认图片')
-        try:
-            if not WORKDIR.cache_dir:
-                raise AppError.ResourceNotFound.raise_('项目缓存目录缺失')
-            default_img: Path = WORKDIR.cache_dir / "default_img.png"
-            if not default_img.exists():
-                raise AppError.ResourceNotFound.raise_('默认图片资源缺失')
-            return default_img
-        except Exception as e:
-            logger.opt(colors=True).error(
-                f'<y>PUSHER</y>:获取默认图片 <r>失败</r> —— {e}')
-            return None
-
-    async def _refresh_image_cache(self) -> bytes | None:
-        """
-        刷新图片缓存，从网络下载新图片
-        Returns:
-            bytes | None: 下载的图片字节数据，失败时返回None
-        """
-        try:
-            if not WORKDIR.cache_dir:
-                raise AppError.ResourceNotFound.raise_('项目缓存目录缺失')
-            # 确保缓存目录存在
-            WORKDIR.cache_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.opt(colors=True).error(
-                f'<y>PUSHER</y>:刷新图片缓存初始化 <r>失败</r> —— {e}')
-            return None
-        # 创建并发任务列表
-        tasks = []
-        for img_url in self.image_queue:
-            try:
-                task = self._create_image_task(img_url)
-                if task:
-                    tasks.append(task)
-            except Exception as e:
-                logger.opt(colors=True).error(
-                    f'<y>PUSHER</y>:创建图片下载任务 <c>{img_url}</c> 失败 —— {e}')
-                continue
-        if not tasks:
-            logger.opt(colors=True).warning(
-                f'<y>PUSHER</y>:TMDB ID <c>{self.tmdb_id}</c> 无有效图片 URL')
-            return None
-        # 等待第一个完成的任务
-        return await self._wait_first_completed_task(tasks)
-
-    def _create_image_task(self, img_url: str) -> asyncio.Task:
-        """
-        创建图片下载任务
-        Args:
-            img_url: 图片URL
-        Returns:
-            asyncio.Task: 图片下载任务对象
-        Raises:
-            AppError.ImageDownloadTaskError: 创建任务失败时抛出
-        """
-        try:
-            if "bgm.tv" in img_url:
-                headers = {
-                    "User-Agent": "AriadusTTT/nonebot_plugin_AniPush/1.0.0 (Python)"}
-                proxy = None
-            else:
-                headers = {
-                    "X-Emby-Token": APPCONFIG.emby_host,
-                    "User-Agent": "AriadusTTT/nonebot_plugin_AniPush/1.0.0 (Python)"}
-                proxy = APPCONFIG.proxy
-            task = asyncio.create_task(
-                get_request(
-                    img_url,
-                    headers=headers,
-                    proxy=proxy,
-                    is_binary=True,
-                    timeout=aiohttp.ClientTimeout(
-                        total=15,
-                        connect=5,
-                        sock_read=10
-                    ),
-                )
-            )
-            return task
-        except Exception as e:
-            AppError.ImageDownloadTaskError.raise_(f"创建图片下载任务失败: {str(e)}")
-
-    async def _wait_first_completed_task(self, tasks: list[asyncio.Task]) -> bytes | None:
-        """
-        等待第一个成功完成的任务，并取消剩余任务
-        Args:
-            tasks: 任务列表
-        Returns:
-            bytes | None: 第一个成功任务的结果，所有任务失败时返回None
-        """
-        remaining_tasks = set(tasks)
-        while remaining_tasks:
-            done, pending = await asyncio.wait(remaining_tasks, return_when=asyncio.FIRST_COMPLETED)
-            remaining_tasks -= done
-            for task in done:
-                if not task.cancelled():
-                    try:
-                        result = task.result()
-                        for t in pending:
-                            t.cancel()
-                        if pending:
-                            await asyncio.wait(pending, timeout=1.0)  # 等待取消完成
-                        return result
-                    except Exception as e:
-                        logger.opt(colors=True).error(
-                            f'<y>PUSHER</y>:图片下载 <r>失败</r>  —— {e}')
-        logger.opt(colors=True).error(
-            f'<y>PUSHER</y>:TMDB ID <c>{self.tmdb_id}</c> 所有图片下载任务 <r>失败</r>')
+    def _get_cache_path(self) -> Path | None:
+        """生成缓存路径"""
+        cache_key = None
+        current_tmdb_id = self.tmdb_id
+        current_series_id = self.emby_series_id
+        if current_tmdb_id and current_tmdb_id != 'None':
+            cache_key = f"{current_tmdb_id}"
+        elif current_series_id:
+            cache_key = f"emby_{current_series_id}"
+        if cache_key and WORKDIR.cache_dir:
+            return WORKDIR.cache_dir / f"{cache_key}.png"
+        logger.opt(colors=True).error("<r>Image</r>:无法生成缓存路径，关键ID缺失！")
         return None
 
-    @staticmethod
-    def _is_image_valid(img_path: str | Path, expire_hours: float = 14 * 24) -> bool:
-        """
-        检查图片是否有效（未过期）
-        Args:
-            img_path: 图片路径
-            expire_hours: 图片过期时间（小时），默认14天
-        Returns:
-            bool: 图片是否有效（存在且未过期）
-        """
+    async def _process_image_queue(self) -> Path | None:
+        """处理图片队列"""
+        if not self.image_queue:
+            return None
+        cleaned_urls = self._clean_image_queue()
+        if not cleaned_urls:
+            return None
+        image_data = await self._download_first_valid_image(cleaned_urls)
+        if not image_data:
+            return None
+        img_path = await self._save_bytes_to_cache(image_data)
+        if img_path:
+            self.output_img = img_path
+            logger.opt(colors=True).info('<g>PUSHER</g>:刷新图片缓存 <g>完成</g>')
+            return img_path
+        return None
+
+    def _search_in_localstore(self) -> Path | None:
+        """在本地缓存中搜索图片"""
+        local_img_path = self._get_cache_path()
+        if not local_img_path:
+            return None
         try:
-            img_path = Path(img_path)
-            if not img_path.exists():
-                return False
-            modified_time = datetime.fromtimestamp(img_path.stat().st_mtime)
-            time_diff = datetime.now() - modified_time
-            return time_diff < timedelta(hours=expire_hours)
+            if not local_img_path.exists():
+                logger.opt(colors=True).info("<y>PUSHER</y>:本地图片不存在")
+                return None
+            try:
+                if self._is_cache_img_expired(local_img_path):
+                    self.is_image_expired = True
+            except Exception as check_e:
+                logger.opt(colors=True).warning(
+                    f"<y>PUSHER</y>:检查图片是否过期时出错：{check_e}，视为已过期")
+                self.is_image_expired = True
+            return local_img_path
+        except Exception as e:
+            logger.opt(colors=True).warning(
+                f"<y>PUSHER</y>:获取本地图片失败：{e}")
+            return None
+
+    def _clean_image_queue(self) -> Dict[str, str]:
+        """清理图片队列，处理Emby图片标签"""
+        url_dict = {}
+        if not self.source_data:
+            for tag_or_url in self.image_queue:
+                if self._is_url(str(tag_or_url)):
+                    if tag_or_url not in url_dict:
+                        url_dict[tag_or_url] = "EXTERNAL"
+            return url_dict
+        series_id = self.source_data.get('series_id')
+        for tag_or_url in self.image_queue:
+            if self._is_url(str(tag_or_url)):
+                if tag_or_url not in url_dict:
+                    url_dict[tag_or_url] = "EXTERNAL"
+            elif FUNCTION.emby_enabled:
+                if series_id:
+                    try:
+                        from ...utils import generate_emby_image_url
+                        url = generate_emby_image_url(
+                            APPCONFIG.emby_host, str(series_id), str(tag_or_url))
+                        if url not in url_dict:
+                            url_dict[url] = "EMBY"
+                            logger.opt(colors=True).debug(
+                                f"<g>Image</g>:使用 Series ID ({series_id}) 拼接 Emby 图片 URL 成功")
+                    except Exception as e:
+                        logger.opt(colors=True).warning(
+                            f"<y>PUSHER</y>:使用 Series ID 拼接 Emby 图片 URL 失败：{e}")
+                else:
+                    logger.opt(colors=True).warning(
+                        "<y>Image</y>:缺少 Series ID，无法为 Emby 标签生成 URL")
+        return url_dict
+
+    def _is_url(self, item: str) -> bool:
+        """检查是否为有效URL"""
+        if not isinstance(item, str):
+            return False
+        try:
+            from urllib.parse import urlparse
+            result = urlparse(item)
+            return result.scheme in ['http', 'https'] and bool(result.netloc)
+        except Exception:
+            return False
+
+    async def _download_first_valid_image(self, url_dict: dict) -> bytes | None:
+        """下载第一个有效图片"""
+        tasks, errors = [], []
+        for url, source in url_dict.items():
+            try:
+                headers = {"User-Agent": "AriadusTTT/nonebot_plugin_AniPush/1.0.0 (Python)"}
+                proxy = None
+                if source == "EMBY":
+                    headers["X-Emby-Token"] = APPCONFIG.emby_key
+                    proxy = APPCONFIG.proxy
+                task = asyncio.create_task(
+                    get_request(
+                        url,
+                        headers=headers,
+                        proxy=proxy,
+                        is_binary=True,
+                        timeout=aiohttp.ClientTimeout(total=15, connect=5, sock_read=5)
+                    )
+                )
+                tasks.append(task)
+            except Exception as e:
+                logger.opt(colors=True).warning(
+                    f"<y>PUSHER</y>:{url} 下载任务创建失败，{e}")
+        if not tasks:
+            return None
+        for task in asyncio.as_completed(tasks):
+            try:
+                binary = await task
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
+                return binary
+            except Exception as e:
+                errors.append(e)
+        if errors:
+            logger.opt(colors=True).warning(
+                f"<y>PUSHER</y>:图片下载全部失败，共 {len(errors)} 个错误。")
+        return None
+
+    async def _save_bytes_to_cache(self, binary: bytes) -> Path | None:
+        """保存图片到缓存"""
+        img_path = self._get_cache_path()
+        if not img_path:
+            return None
+        try:
+            img_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = img_path.with_suffix('.tmp')
+            with open(temp_path, 'wb') as f:
+                f.write(binary)
+            shutil.move(temp_path, img_path)
+            logger.opt(colors=True).debug(
+                f"<g>PUSHER</g>:图片保存成功 -> {img_path}")
+            return img_path
+        except Exception as e:
+            logger.opt(colors=True).warning(
+                f"<y>PUSHER</y>:图片写入或移动失败，{e}")
+            if 'temp_path' in locals() and temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except OSError:
+                    pass
+            return None
+
+    def _fallback_to_available_image(self) -> Path | None:
+        """回退到可用图片"""
+        if self.output_img and self.output_img.exists():
+            logger.opt(colors=True).warning(
+                '<y>PUSHER</y>:获取新图片失败，回退使用超期图片')
+            return self.output_img
+        logger.opt(colors=True).warning(
+            '<y>PUSHER</y>:获取新/过期图片失败，使用默认图片')
+        return self._get_default_image()
+    def _get_default_image(self) -> Path | None:
+        """获取默认图片"""
+        try:
+            res_path = Path(__file__).parent.parent.parent / "res" / "default_img.png"
+            if not res_path.exists():
+                logger.opt(colors=True).warning(
+                    f"<y>PUSHER</y>:默认图片不存在 {res_path}")
+                return None
+            return res_path
+        except Exception as e:
+            logger.opt(colors=True).warning(
+                f"<y>PUSHER</y>:获取默认图片失败：{e}")
+            return None
+
+    @staticmethod
+    def _is_cache_img_expired(img_path: str | Path, expire_hours: float = 14 * 24) -> bool:
+        """检查缓存图片是否过期"""
+        path = Path(img_path) if isinstance(img_path, str) else img_path
+        try:
+            if not path.is_file():
+                logger.opt(colors=True).debug(
+                    f"<y>Utils</y>:缓存图片不存在，视为过期: {path}")
+                return True
+            modified_timestamp = path.stat().st_mtime
+            modified_time = datetime.fromtimestamp(modified_timestamp)
+            is_expired = datetime.now() - modified_time > timedelta(hours=expire_hours)
+            logger.opt(colors=True).trace(
+                f"<y>Utils</y>:检查图片 {path} 是否过期: {is_expired}")
+            return is_expired
+        except OSError as e:
+            logger.opt(colors=True).warning(
+                f"<y>Utils</y>:检查图片 {path} 修改时间时发生 OS 错误：{e}，视为已过期")
+            return True
         except Exception as e:
             logger.opt(colors=True).error(
-                f'<y>PUSHER</y>:检查本地缓存图片有效期 <r>失败</r> —— {e}')
-            return False
+                f"<r>Utils</r>:检查图片 {path} 是否过期时发生未知严重错误：{e}，视为已过期")
+            return True

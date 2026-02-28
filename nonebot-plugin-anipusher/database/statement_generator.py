@@ -22,16 +22,20 @@ class StatementGenerator:
             model_class = table_name.get_model_class()
             # 解析字段定义
             column_definitions = []
-            for field_name, field_info in model_class.model_fields.items():
+            fields = getattr(model_class, "model_fields", getattr(model_class, "__fields__", {}))
+            for field_name, field_info in fields.items():
                 # 获取字段类型
-                sqlite_type = convert_python_type_to_sqlite(field_info.annotation)
+                annotation = getattr(field_info, 'annotation', getattr(field_info, 'type_', None))
+                sqlite_type = convert_python_type_to_sqlite(annotation)
                 parts = [f"{field_name} {sqlite_type}"]
                 # 处理NOT NULL约束
-                if field_info.is_required():
+                is_required = field_info.is_required() if hasattr(field_info, 'is_required') else getattr(field_info, 'required', False)
+                if is_required:
                     parts.append("NOT NULL")
                 # 处理DEFAULT约束
-                if field_info.default is not None and field_info.default != Ellipsis:
-                    default_value = field_info.default
+                default_val = getattr(field_info, 'default', None)
+                if default_val is not None and default_val != Ellipsis:
+                    default_value = default_val
                     # 根据类型处理默认值的格式
                     if sqlite_type == 'TEXT':
                         default_value = f"'{default_value}'" if default_value is not None else "NULL"
@@ -41,7 +45,8 @@ class StatementGenerator:
                         default_value = "NULL"
                     parts.append(f"DEFAULT {default_value}")
                 # 处理PRIMARY KEY约束
-                if field_info.json_schema_extra and field_info.json_schema_extra.get('primary_key', False):
+                extra = getattr(field_info, "json_schema_extra", None) or getattr(getattr(field_info, "field_info", None), "extra", {}) or {}
+                if extra and extra.get('primary_key', False):
                     parts.append("PRIMARY KEY")
                     # 如果是INTEGER类型且是主键，添加AUTOINCREMENT
                     if sqlite_type == 'INTEGER':
@@ -100,7 +105,8 @@ class StatementGenerator:
         """
         try:
             model_class = table_name.get_model_class()
-            table_keys = list(model_class.model_fields.keys())
+            fields = getattr(model_class, "model_fields", getattr(model_class, "__fields__", {}))
+            table_keys = list(fields.keys())
             # 提取所有有效字段（过滤掉None值和不存在于表中的字段）
             valid_data = {key: value for key, value in data.items() if value is not None and key in table_keys}
             # columns为所有有效字段（过滤掉None值和不存在于表中的字段）
@@ -110,7 +116,7 @@ class StatementGenerator:
             # 找出所有主键列（假设可能有多个主键）
             primary_keys = [
                 col for col in table_keys
-                if (extra := getattr(model_class.model_fields[col], "json_schema_extra", None))
+                if (extra := getattr(fields[col], "json_schema_extra", None) or getattr(getattr(fields[col], "field_info", None), "extra", {}) or {})
                 and isinstance(extra, dict)
                 and extra.get("primary_key", False)
             ]
@@ -154,7 +160,9 @@ class StatementGenerator:
             AppError: 当生成语句过程中发生异常时
         """
         try:
-            table_keys = list(table_name.get_model_class().model_fields.keys())
+            model_class = table_name.get_model_class()
+            fields = getattr(model_class, "model_fields", getattr(model_class, "__fields__", {}))
+            table_keys = list(fields.keys())
             # 处理列名
             if columns is None or len(columns) == 0:
                 column_clause = "*"

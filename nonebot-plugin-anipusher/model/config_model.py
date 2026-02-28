@@ -1,13 +1,8 @@
 # 导入必要的模块
 from pathlib import Path
-from typing import Annotated
-from pydantic import BaseModel, Field, field_validator, BeforeValidator
+from typing import Optional, Dict, List
+from pydantic import BaseModel, Field, validator
 from ..mapping import TableName
-from ..exceptions import AppError
-from ..utils.data_conversion import convert_to_str
-
-# 类型别名必须定义在类外部
-StringOrNone = Annotated[str | None, BeforeValidator(convert_to_str)]
 
 
 class AniPusherConfig(BaseModel):
@@ -15,10 +10,18 @@ class AniPusherConfig(BaseModel):
 
     包含API密钥、服务器地址等关键配置信息，用于连接外部服务
     """
-    proxy: StringOrNone = Field(default=None, description="代理服务器地址")
-    tmdb_authorization: StringOrNone = Field(default=None, description="TMDB API密钥")
-    emby_host: StringOrNone = Field(default=None, description="Emby服务器地址")
-    emby_key: StringOrNone = Field(default=None, description="Emby API密钥")
+    proxy: Optional[str] = Field(default=None, description="代理服务器地址")
+    tmdb_authorization: Optional[str] = Field(default=None, description="TMDB API密钥")
+    emby_host: Optional[str] = Field(default=None, description="Emby服务器地址")
+    emby_key: Optional[str] = Field(default=None, description="Emby API密钥")
+    
+    @validator('proxy', 'tmdb_authorization', 'emby_host', 'emby_key', pre=True)
+    def convert_none_str(cls, v):
+        """将字符串'None' 转换为 None"""
+        if isinstance(v, str):
+            if v.strip().lower() == 'none' or v.strip() == '':
+                return None
+        return v
 
 
 class Config(BaseModel):
@@ -26,7 +29,7 @@ class Config(BaseModel):
     配置映射
     简化配置命名
     """
-    anipusher : AniPusherConfig
+    anipusher: AniPusherConfig
 
 
 class FeatureFlags(BaseModel):
@@ -43,15 +46,14 @@ class PushTarget(BaseModel):
 
     包含群组推送目标和私聊推送目标，用于控制不同类型消息的分发范围
     """
-    GroupPushTarget: dict[str, list[str]] = Field(default_factory=dict, description="工作群组推送目标")
-    PrivatePushTarget: dict[str, list[str]] = Field(default_factory=dict, description="工作私聊推送目标")
+    GroupPushTarget: Dict[str, List[str]] = Field(default_factory=dict, description="工作群组推送目标")
+    PrivatePushTarget: Dict[str, List[str]] = Field(default_factory=dict, description="工作私聊推送目标")
 
-    @field_validator('GroupPushTarget', 'PrivatePushTarget')
-    @classmethod
-    def check_push_target(cls, v: dict[str, list[str]]) -> dict[str, list[str]]:
+    @validator('GroupPushTarget', 'PrivatePushTarget', pre=True)
+    def check_push_target(cls, v: Dict[str, List[str]]) -> Dict[str, List[str]]:
         """
         检查推送目标配置的合法性
-        验证规则：
+        验证规则:
         1. 确保推送目标字典中的键（模型类型）在系统支持的范围内
         2. 使用 TableName 枚举作为有效键的参考标准
         参数:
@@ -67,7 +69,7 @@ class PushTarget(BaseModel):
         valid_targets = [table_name.value for table_name in TableName]
         for key in v:
             if key not in valid_targets:
-                AppError.InvalidParameter.raise_(f"推送队列结构错误，不支持来源为：{key}")
+                raise ValueError(f"推送队列结构错误，不支持来源为：{key}")
         return v
 
 
@@ -76,7 +78,7 @@ class WorkDir(BaseModel):
 
     管理缓存目录、数据库文件和配置文件的存储位置
     """
-    cache_dir: Path | None = Field(default=None, description="图片缓存的路径")
-    data_file: Path | None = Field(default=None, description="db数据库文件的路径")
-    config_file: Path | None = Field(default=None, description="推送对象json文件的路径")
-    message_template_dir: Path | None = Field(default=None, description="默认消息模板")
+    cache_dir: Optional[Path] = Field(default=None, description="图片缓存的路径")
+    data_file: Optional[Path] = Field(default=None, description="db数据库文件的路径")
+    config_file: Optional[Path] = Field(default=None, description="推送对象json文件的路径")
+    message_template_dir: Optional[Path] = Field(default=None, description="默认消息模板")

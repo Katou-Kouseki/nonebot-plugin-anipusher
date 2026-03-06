@@ -116,6 +116,12 @@ merged_template:
     type: "dynamic"
     weight: 4
 
+  # 字幕来源
+  - content: "🔤 字幕来源 - {subgroup}"
+    field: "subgroup"
+    type: "dynamic"
+    weight: 4.5
+
   # 追番进度
   - content: "📊 追番进度 - {progress}"
     field: "progress"

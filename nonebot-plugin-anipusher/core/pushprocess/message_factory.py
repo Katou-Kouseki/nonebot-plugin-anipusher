@@ -181,11 +181,12 @@ class MessageRenderer:
             message = Message(str(message).rstrip("\n"))
         return message
 
-    def render_base(self, data: dict) -> Message:
+    def render_base(self, data: dict, is_merged: bool = False) -> Message:
         """
         渲染除@用户部分外的基础消息内容
         Args:
             data: 包含替换变量的字典，用于填充模板中的占位符
+            is_merged: 是否使用合并模板
         Returns:
             Message: 渲染后的基础消息对象（不包含@用户内容）
         Raises:
@@ -193,8 +194,10 @@ class MessageRenderer:
             AppError.MessageRenderError: 当基础消息渲染失败时
         """
         try:
-            template_items = self.template_config.get("template", [])
+            template_key = "merged_template" if is_merged else "template"
+            template_items = self.template_config.get(template_key, [])
             if not template_items:
+                if is_merged: return self._render_merged_default(data)
                 AppError.MissingConfiguration.raise_("消息模板文件中未定义任何模板项")
             sorted_items = sorted(
                 template_items, key=lambda x: x.get("weight", 0))
@@ -203,7 +206,7 @@ class MessageRenderer:
                 if item.get("type") == "at":
                     continue
                 try:
-                    line = self._line_render(item, data)
+                    line = self._line_render_merged(item, data) if is_merged else self._line_render(item, data)
                     if line is not None:
                         rendered_message += line
                 except Exception as e:
@@ -218,11 +221,16 @@ class MessageRenderer:
         except Exception as e:
             AppError.MessageRenderError.raise_(f"基础消息渲染失败: {e}")
 
-    def render_at(self, data: dict) -> Message:
+    def _render_merged_default_at(self, data: dict) -> Message:
+        message = Message()
+        return message
+
+    def render_at(self, data: dict, is_merged: bool = False) -> Message:
         """
         专门渲染@用户部分的消息内容
         Args:
             data: 包含替换变量的字典，必须包含at字段，存储需要@的用户列表
+            is_merged: 是否使用合并模板
         Returns:
             Message: 渲染后的@用户消息对象
         Raises:
@@ -230,8 +238,10 @@ class MessageRenderer:
             AppError.MessageRenderError: 当@消息渲染失败时
         """
         try:
-            template_items = self.template_config.get("template", [])
+            template_key = "merged_template" if is_merged else "template"
+            template_items = self.template_config.get(template_key, [])
             if not template_items:
+                if is_merged: return self._render_merged_default_at(data)
                 AppError.MissingConfiguration.raise_("消息模板文件中未定义任何模板项")
             sorted_items = sorted(
                 template_items, key=lambda x: x.get("weight", 0))
@@ -239,7 +249,7 @@ class MessageRenderer:
             for item in sorted_items:
                 if item.get("type") == "at":
                     try:
-                        line = self._line_render(item, data)
+                        line = self._line_render_merged(item, data) if is_merged else self._line_render(item, data)
                         if line is not None:
                             rendered_message += line
                     except Exception as e:

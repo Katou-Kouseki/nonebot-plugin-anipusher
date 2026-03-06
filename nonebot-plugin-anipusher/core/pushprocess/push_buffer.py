@@ -166,12 +166,25 @@ class PushBuffer:
     
     def _extract_episode_number(self, episode_str: str) -> int:
         """从字符串中提取集数"""
+        import re
         if not episode_str:
             return 0
         
-        match = re.search(r'\d+', str(episode_str))
+        # 尝试匹配 "第 x 集" 中的 x
+        match = re.search(r'第\s*(\d+)\s*集', str(episode_str))
         if match:
-            return int(match.group())
+            return int(match.group(1))
+
+        # 尝试匹配 "Exx" 中的 xx
+        match = re.search(r'[Ee](\d+)', str(episode_str))
+        if match:
+            return int(match.group(1))
+            
+        # 回退策略：提取字符串中的最后一个数字
+        numbers = re.findall(r'\d+', str(episode_str))
+        if numbers:
+            return int(numbers[-1])
+            
         return 0
     
     def _extract_season_number(self, season_str: str) -> str:

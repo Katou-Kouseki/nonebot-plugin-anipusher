@@ -234,7 +234,7 @@ class PushManager:
                 "<r>RENDER</r>:消息渲染 <r>失败</r> —— 推送流程 <r>中断</r>")
             return
         await self._push_to_private(message)
-        await self._push_to_group(message, message_params)
+        await self._push_to_group(message, message_params, is_merged=is_merged)
         push_type = "合并推送" if is_merged else "单集推送"
         logger.opt(colors=True).info(
             f"<g>PUSHER</g>: {push_type} [{message_params.get('title')}] 完成")
@@ -249,7 +249,7 @@ class PushManager:
         logger.opt(colors=True).info(
             "<g>PUSHER</g>:私聊推送        |<g>COMPLETE</g>")
 
-    async def _push_to_group(self, message, message_params: dict):
+    async def _push_to_group(self, message, message_params: dict, is_merged: bool = False):
         """推送消息到群组"""
         if not self.group_push_target:
             logger.opt(colors=True).info(
@@ -257,12 +257,12 @@ class PushManager:
             return
         try:
             message_renderer = MessageRenderer()
-            base_message = message_renderer.render_base(message_params)
+            base_message = message_renderer.render_base(message_params, is_merged=is_merged)
             logger.opt(colors=True).info(
                 "<g>PUSHER</g>:基础消息渲染  |<g>COMPLETE</g>")
             for group_id, subscriber in self.group_push_target.items():
                 message_params["at"] = subscriber
-                at_message = message_renderer.render_at(message_params)
+                at_message = message_renderer.render_at(message_params, is_merged=is_merged)
                 full_message = base_message + at_message
                 await group_msg_pusher(full_message, [group_id])
             logger.opt(colors=True).info(

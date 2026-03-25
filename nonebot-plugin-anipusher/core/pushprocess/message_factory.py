@@ -364,13 +364,23 @@ class MessageRenderer:
             episode_range = (data or {}).get("episode_range", "")
             season = (data or {}).get("season", "1")
             if episode_count and episode_range:
-                formatted_text = content.replace(
-                    "{season}", str(season)
-                ).replace(
-                    "{episode_count}", str(episode_count)
-                ).replace(
-                    "{episode_range}", episode_range
-                )
+                action = (data or {}).get("action", "")
+                if action == "订阅完结":
+                    # 完结撒花逻辑
+                    format_str = content.replace("更新 {episode_count} 集", "完结撒花")
+                    formatted_text = format_str.replace(
+                        "{season}", str(season)
+                    ).replace(
+                        "{episode_range}", episode_range
+                    )
+                else:
+                    formatted_text = content.replace(
+                        "{season}", str(season)
+                    ).replace(
+                        "{episode_count}", str(episode_count)
+                    ).replace(
+                        "{episode_range}", episode_range
+                    )
                 return MessageSegment.text(formatted_text + "\n")
             return None
         elif type == "at":

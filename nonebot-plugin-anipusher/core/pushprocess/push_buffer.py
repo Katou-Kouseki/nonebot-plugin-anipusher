@@ -66,14 +66,18 @@ class PushBuffer:
             if buffer_key in self.tasks and not self.tasks[buffer_key].done():
                 self.tasks[buffer_key].cancel()
             
+            # 如果是订阅完结，缩短缓冲时间，尽快推送
+            is_finished = episode_data.get('action') == "订阅完结"
+            delay = 2 if is_finished else 60
+            
             self.tasks[buffer_key] = asyncio.create_task(
-                self._delayed_push(buffer_key, push_callback)
+                self._delayed_push(buffer_key, push_callback, delay=delay)
             )
     
-    async def _delayed_push(self, buffer_key: str, push_callback: Callable):
+    async def _delayed_push(self, buffer_key: str, push_callback: Callable, delay: int = 60):
         """延迟推送"""
         try:
-            await asyncio.sleep(60)
+            await asyncio.sleep(delay)
             
             async with self.locks[buffer_key]:
                 if buffer_key not in self.buffer or not self.buffer[buffer_key]:
@@ -128,7 +132,17 @@ class PushBuffer:
                 season = self._extract_season_number(ep.get('season', ''))
         
         episode_numbers = sorted(set(episode_numbers))
-        episode_range = self._format_episode_range(episode_numbers)
+        action = episodes[-1].get('action')
+        
+        # 如果是订阅完结，特别处理集数范围，显示从 E01 到当前最新集
+        if action == "订阅完结" and episode_numbers:
+            max_ep = max(episode_numbers)
+            if max_ep > 1:
+                episode_range = f"E01-E{max_ep:02d}"
+            else:
+                episode_range = f"E{max_ep:02d}"
+        else:
+            episode_range = self._format_episode_range(episode_numbers)
         
         merged = episodes[0].copy()
         first_image = merged.get('image')
@@ -137,7 +151,6 @@ class PushBuffer:
             f"<g>PushBuffer</g>: 合并 [{title}] 使用第一集图片: {first_image}"
         )
 
-        action = episodes[-1].get('action')
         source = episodes[-1].get('source', '')
         if 'EMBY' in source.upper():
             action = '媒体库批量更新'

@@ -117,7 +117,7 @@ class AppError(Enum):
         """抛出此错误对应的异常
             并记录错误日志
         """
-        error = self.Exception(self, extra_msg)
+        error = AppError.Exception(self, extra_msg)
         self._log_error(error)
         raise error
 
